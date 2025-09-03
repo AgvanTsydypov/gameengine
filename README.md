@@ -5,18 +5,18 @@
 ## Возможности
 
 - ✅ Регистрация и авторизация пользователей
-- ✅ Хранение пользовательских данных (текст, файлы, JSON)
+- ✅ Хранение пользовательских данных только в Supabase (облачная БД)
 - ✅ Современный веб-интерфейс с Bootstrap 5
-- ✅ Интеграция с Supabase (облачная база данных)
+- ✅ Полная интеграция с Supabase (без локальной БД)
 - 🔄 Интеграция со Stripe (платежи) - в разработке
 - ✅ Адаптивный дизайн
 - ✅ Безопасное хранение паролей
 
 ## Технологии
 
-- **Backend**: Flask, SQLAlchemy, Werkzeug
+- **Backend**: Flask, Werkzeug
 - **Frontend**: HTML5, CSS3, JavaScript, Bootstrap 5
-- **База данных**: SQLite (локально), Supabase (облако)
+- **База данных**: Supabase (облачная PostgreSQL)
 - **Платежи**: Stripe (планируется)
 - **Безопасность**: bcrypt для хеширования паролей
 
@@ -56,8 +56,8 @@ SECRET_KEY=your-super-secret-key-here
 FLASK_ENV=development
 FLASK_DEBUG=True
 
-# База данных
-DATABASE_URL=sqlite:///app.db
+# База данных (не используется - только Supabase)
+# DATABASE_URL=sqlite:///app.db
 
 # Supabase (получите на https://supabase.com)
 SUPABASE_URL=https://your-project.supabase.co
@@ -76,13 +76,12 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 2. В SQL Editor выполните следующие команды для создания таблиц:
 
 ```sql
--- Таблица пользователей
+-- Таблица пользователей (профили)
 CREATE TABLE users (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     username VARCHAR(80) UNIQUE NOT NULL,
     email VARCHAR(120) UNIQUE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Таблица данных пользователей
@@ -100,6 +99,8 @@ CREATE TABLE user_data (
 CREATE INDEX idx_user_data_user_id ON user_data(user_id);
 CREATE INDEX idx_user_data_created_at ON user_data(created_at DESC);
 ```
+
+**Важно**: Полную схему с триггерами и политиками безопасности смотрите в файле `supabase_schema.sql`
 
 3. Включите Row Level Security (RLS) для безопасности:
 

@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
-from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
@@ -18,34 +17,96 @@ app = Flask(__name__)
 config_name = os.getenv('FLASK_ENV', 'development')
 app.config.from_object(config[config_name])
 
-# Инициализация расширений
-db = SQLAlchemy(app)
+# Функции для работы с пользователями через Supabase
+def create_user(username, email, password):
+    """Создает нового пользователя в Supabase"""
+    if not supabase_manager.is_connected():
+        return None
+    
+    try:
+        # Создаем пользователя в auth.users
+        # Профиль автоматически создается через триггер
+        auth_response = supabase_manager.client.auth.sign_up({
+            "email": email,
+            "password": password,
+            "options": {
+                "data": {
+                    "username": username
+                }
+            }
+        })
+        
+        if auth_response.user:
+            logger.info(f"Пользователь {username} успешно создан")
+            return {
+                'user': auth_response.user,
+                'user_id': auth_response.user.id
+            }
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Ошибка при создании пользователя: {e}")
+        return None
 
-# Модели базы данных
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(120), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    is_active = db.Column(db.Boolean, default=True)
+def get_user_by_username(username):
+    """Получает пользователя по имени пользователя"""
+    if not supabase_manager.is_connected():
+        return None
     
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-    
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+    try:
+        response = supabase_manager.client.table('users').select('*').eq('username', username).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Ошибка при получении пользователя: {e}")
+        return None
 
-class UserData(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    data_type = db.Column(db.String(50), nullable=False)  # 'file', 'text', 'json', etc.
-    data_content = db.Column(db.Text, nullable=False)
-    filename = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+def get_user_by_email(email):
+    """Получает пользователя по email"""
+    if not supabase_manager.is_connected():
+        return None
     
-    user = db.relationship('User', backref=db.backref('user_data', lazy=True))
+    try:
+        response = supabase_manager.client.table('users').select('*').eq('email', email).execute()
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Ошибка при получении пользователя по email: {e}")
+        return None
+
+def authenticate_user(username, password):
+    """Аутентифицирует пользователя через Supabase Auth"""
+    if not supabase_manager.is_connected():
+        logger.error("Supabase не подключен")
+        return None
+    
+    try:
+        # Получаем пользователя по username
+        user = get_user_by_username(username)
+        if not user:
+            logger.warning(f"Пользователь {username} не найден")
+            return None
+        
+        logger.info(f"Найден пользователь: {user['email']}")
+        
+        # Используем Supabase Auth для проверки пароля
+        auth_response = supabase_manager.client.auth.sign_in_with_password({
+            "email": user['email'],
+            "password": password
+        })
+        
+        if auth_response.user:
+            logger.info(f"Успешная аутентификация для {username}")
+            return {
+                'user': auth_response.user,
+                'profile': user
+            }
+        
+        logger.warning(f"Неверный пароль для {username}")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Ошибка при аутентификации {username}: {e}")
+        return None
 
 # Маршруты
 @app.route('/')
@@ -67,25 +128,25 @@ def register():
             flash('Пароли не совпадают!', 'error')
             return render_template('register.html')
         
-        if User.query.filter_by(username=username).first():
+        # Проверяем, существует ли пользователь
+        if get_user_by_username(username):
             flash('Пользователь с таким именем уже существует!', 'error')
             return render_template('register.html')
         
-        if User.query.filter_by(email=email).first():
+        if get_user_by_email(email):
             flash('Пользователь с таким email уже существует!', 'error')
             return render_template('register.html')
         
-        # Создание нового пользователя
-        user = User(username=username, email=email)
-        user.set_password(password)
-        
+        # Создание нового пользователя в Supabase
         try:
-            db.session.add(user)
-            db.session.commit()
-            flash('Регистрация прошла успешно! Теперь вы можете войти в систему.', 'success')
-            return redirect(url_for('login'))
+            result = create_user(username, email, password)
+            if result:
+                flash('Регистрация прошла успешно! Теперь вы можете войти в систему.', 'success')
+                return redirect(url_for('login'))
+            else:
+                flash('Произошла ошибка при регистрации. Проверьте настройки Supabase.', 'error')
         except Exception as e:
-            db.session.rollback()
+            logger.error(f"Ошибка при регистрации: {e}")
             flash('Произошла ошибка при регистрации. Попробуйте еще раз.', 'error')
     
     return render_template('register.html')
@@ -96,11 +157,12 @@ def login():
         username = request.form['username']
         password = request.form['password']
         
-        user = User.query.filter_by(username=username).first()
+        # Аутентифицируем пользователя
+        auth_result = authenticate_user(username, password)
         
-        if user and user.check_password(password) and user.is_active:
-            session['user_id'] = user.id
-            session['username'] = user.username
+        if auth_result:
+            session['user_id'] = auth_result['profile']['id']
+            session['username'] = auth_result['profile']['username']
             flash('Вы успешно вошли в систему!', 'success')
             return redirect(url_for('dashboard'))
         else:
@@ -110,6 +172,14 @@ def login():
 
 @app.route('/logout')
 def logout():
+    # Выходим из Supabase Auth
+    if supabase_manager.is_connected():
+        try:
+            supabase_manager.client.auth.sign_out()
+        except Exception as e:
+            logger.error(f"Ошибка при выходе из Supabase Auth: {e}")
+    
+    # Очищаем сессию Flask
     session.clear()
     flash('Вы вышли из системы.', 'info')
     return redirect(url_for('index'))
@@ -119,10 +189,16 @@ def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    user = User.query.get(session['user_id'])
-    user_data = UserData.query.filter_by(user_id=user.id).order_by(UserData.created_at.desc()).all()
+    # Получаем данные пользователя из Supabase
+    user_data_list = supabase_manager.get_user_data(session['user_id'])
     
-    return render_template('dashboard.html', user=user, user_data=user_data)
+    # Создаем объект пользователя для шаблона
+    user = {
+        'id': session['user_id'],
+        'username': session['username']
+    }
+    
+    return render_template('dashboard.html', user=user, user_data=user_data_list)
 
 @app.route('/save_data', methods=['POST'])
 def save_data():
@@ -136,62 +212,50 @@ def save_data():
     if not data_content:
         return jsonify({'error': 'Содержимое не может быть пустым'}), 400
     
+    if not supabase_manager.is_connected():
+        return jsonify({'error': 'Supabase не подключен. Проверьте настройки.'}), 500
+    
     try:
-        # Сохраняем в локальную базу данных
-        user_data = UserData(
-            user_id=session['user_id'],
+        # Сохраняем только в Supabase
+        result = supabase_manager.save_user_data(
+            user_id=str(session['user_id']),
             data_type=data_type,
             data_content=data_content,
             filename=filename
         )
         
-        db.session.add(user_data)
-        db.session.commit()
-        
-        # Также сохраняем в Supabase, если подключен
-        if supabase_manager.is_connected():
-            supabase_result = supabase_manager.save_user_data(
-                user_id=str(session['user_id']),
-                data_type=data_type,
-                data_content=data_content,
-                filename=filename
-            )
-            if supabase_result:
-                logger.info("Данные также сохранены в Supabase")
-        
-        return jsonify({'success': True, 'message': 'Данные сохранены успешно'})
+        if result:
+            logger.info("Данные сохранены в Supabase")
+            return jsonify({'success': True, 'message': 'Данные сохранены успешно'})
+        else:
+            return jsonify({'error': 'Ошибка при сохранении данных в Supabase'}), 500
+            
     except Exception as e:
-        db.session.rollback()
         logger.error(f"Ошибка при сохранении данных: {e}")
         return jsonify({'error': 'Ошибка при сохранении данных'}), 500
 
-@app.route('/delete_data/<int:data_id>', methods=['POST'])
+@app.route('/delete_data/<data_id>', methods=['POST'])
 def delete_data(data_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Необходима авторизация'}), 401
     
-    user_data = UserData.query.filter_by(id=data_id, user_id=session['user_id']).first()
-    
-    if not user_data:
-        return jsonify({'error': 'Данные не найдены'}), 404
+    if not supabase_manager.is_connected():
+        return jsonify({'error': 'Supabase не подключен. Проверьте настройки.'}), 500
     
     try:
-        # Удаляем из локальной базы данных
-        db.session.delete(user_data)
-        db.session.commit()
+        # Удаляем только из Supabase
+        result = supabase_manager.delete_user_data(
+            data_id=str(data_id),
+            user_id=str(session['user_id'])
+        )
         
-        # Также удаляем из Supabase, если подключен
-        if supabase_manager.is_connected():
-            supabase_result = supabase_manager.delete_user_data(
-                data_id=str(data_id),
-                user_id=str(session['user_id'])
-            )
-            if supabase_result:
-                logger.info("Данные также удалены из Supabase")
-        
-        return jsonify({'success': True, 'message': 'Данные удалены успешно'})
+        if result:
+            logger.info("Данные удалены из Supabase")
+            return jsonify({'success': True, 'message': 'Данные удалены успешно'})
+        else:
+            return jsonify({'error': 'Данные не найдены или ошибка при удалении'}), 404
+            
     except Exception as e:
-        db.session.rollback()
         logger.error(f"Ошибка при удалении данных: {e}")
         return jsonify({'error': 'Ошибка при удалении данных'}), 500
 
@@ -200,8 +264,6 @@ def delete_data(data_id):
 def payment():
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    
-    user = User.query.get(session['user_id'])
     
     if stripe_manager.is_configured():
         # TODO: Реализовать полную интеграцию со Stripe
@@ -224,12 +286,15 @@ def create_payment_intent():
         amount = int(request.json.get('amount', 1000))  # По умолчанию $10.00
         currency = request.json.get('currency', 'usd')
         
-        user = User.query.get(session['user_id'])
+        # Получаем данные пользователя из Supabase
+        user_data = get_user_by_username(session['username'])
+        if not user_data:
+            return jsonify({'error': 'Пользователь не найден'}), 404
         
         # Создаем или получаем клиента Stripe
-        customer = stripe_manager.get_customer_by_email(user.email)
+        customer = stripe_manager.get_customer_by_email(user_data['email'])
         if not customer:
-            customer = stripe_manager.create_customer(user.email, user.username)
+            customer = stripe_manager.create_customer(user_data['email'], user_data['username'])
         
         if customer:
             # Создаем намерение платежа
@@ -253,7 +318,11 @@ def create_payment_intent():
         return jsonify({'error': 'Ошибка при создании платежа'}), 500
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
+    # Проверяем подключение к Supabase
+    if supabase_manager.is_connected():
+        logger.info("✅ Supabase подключен")
+    else:
+        logger.warning("⚠️  Supabase не подключен. Проверьте настройки в .env")
+    
     port = app.config.get('PORT', 5000)
     app.run(debug=True, host='0.0.0.0', port=port)

@@ -4,17 +4,22 @@
 """
 import os
 import sys
-from app import app, db
+from app import app
 
-def create_tables():
-    """Создает таблицы в базе данных"""
-    with app.app_context():
-        try:
-            db.create_all()
-            print("✅ Таблицы базы данных созданы успешно")
-        except Exception as e:
-            print(f"❌ Ошибка при создании таблиц: {e}")
-            sys.exit(1)
+def check_supabase_connection():
+    """Проверяет подключение к Supabase"""
+    try:
+        from supabase_client import supabase_manager
+        if supabase_manager.is_connected():
+            print("✅ Подключение к Supabase установлено")
+            return True
+        else:
+            print("❌ Не удалось подключиться к Supabase")
+            print("💡 Проверьте настройки SUPABASE_URL и SUPABASE_KEY в .env")
+            return False
+    except Exception as e:
+        print(f"❌ Ошибка при проверке Supabase: {e}")
+        return False
 
 def check_environment():
     """Проверяет настройки окружения"""
@@ -55,9 +60,10 @@ def main():
     check_environment()
     print()
     
-    # Создаем таблицы
-    print("📊 Создание таблиц базы данных...")
-    create_tables()
+    # Проверяем подключение к Supabase
+    print("📊 Проверка подключения к Supabase...")
+    if not check_supabase_connection():
+        print("⚠️  Приложение будет работать с ограниченным функционалом")
     print()
     
     # Запускаем приложение
