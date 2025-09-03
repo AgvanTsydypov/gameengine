@@ -17,78 +17,62 @@ config_name = os.getenv('FLASK_ENV', 'development')
 app.config.from_object(config[config_name])
 
 # Функции для работы с пользователями через Supabase
-def create_user(username, email, password):
-    """Создает нового пользователя в Supabase"""
+def create_user(email, password):
+    """Создает нового пользователя в Supabase Auth"""
     if not supabase_manager.is_connected():
+        logger.error("Supabase не подключен для создания пользователя")
         return None
     
     try:
-        # Создаем пользователя в auth.users
-        # Профиль автоматически создается через триггер
+        logger.info(f"Создание пользователя: email={email}")
+        
+        # Создаем пользователя в auth.users только с email и паролем
         auth_response = supabase_manager.client.auth.sign_up({
             "email": email,
-            "password": password,
-            "options": {
-                "data": {
-                    "username": username
-                }
-            }
+            "password": password
         })
         
         if auth_response.user:
-            logger.info(f"Пользователь {username} успешно создан")
+            logger.info(f"Пользователь {email} успешно создан в auth.users с ID: {auth_response.user.id}")
+            
             return {
                 'user': auth_response.user,
                 'user_id': auth_response.user.id
             }
         
+        logger.error("Не удалось создать пользователя в auth.users")
         return None
         
     except Exception as e:
         logger.error(f"Ошибка при создании пользователя: {e}")
         return None
 
-def get_user_by_username(username):
-    """Получает пользователя по имени пользователя"""
-    return supabase_manager.get_user_by_username(username)
-
-def get_user_by_email(email):
-    """Получает пользователя по email"""
-    return supabase_manager.get_user_by_email(email)
-
-def authenticate_user(username, password):
+def authenticate_user(email, password):
     """Аутентифицирует пользователя через Supabase Auth"""
     if not supabase_manager.is_connected():
         logger.error("Supabase не подключен")
         return None
     
     try:
-        # Получаем пользователя по username из profiles
-        profile = get_user_by_username(username)
-        if not profile:
-            logger.warning(f"Пользователь {username} не найден")
-            return None
+        logger.info(f"Попытка аутентификации пользователя: {email}")
         
-        logger.info(f"Найден профиль пользователя: {profile['username']}")
-        
-        # Используем email из профиля для аутентификации
         auth_response = supabase_manager.client.auth.sign_in_with_password({
-            "email": profile['email'],
+            "email": email,
             "password": password
         })
         
         if auth_response.user:
-            logger.info(f"Успешная аутентификация для {username}")
+            logger.info(f"Успешная аутентификация для {email}")
             return {
                 'user': auth_response.user,
-                'profile': profile
+                'email': auth_response.user.email
             }
         
-        logger.warning(f"Неверный пароль для {username}")
+        logger.warning(f"Неверный пароль для {email}")
         return None
         
     except Exception as e:
-        logger.error(f"Ошибка при аутентификации {username}: {e}")
+        logger.error(f"Ошибка при аутентификации {email}: {e}")
         return None
 
 # Маршруты
@@ -101,7 +85,6 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
         email = request.form['email']
         password = request.form['password']
         confirm_password = request.form['confirm_password']
@@ -111,23 +94,14 @@ def register():
             flash('Пароли не совпадают!', 'error')
             return render_template('register.html')
         
-        # Проверяем, существует ли пользователь
-        if get_user_by_username(username):
-            flash('Пользователь с таким именем уже существует!', 'error')
-            return render_template('register.html')
-        
-        if get_user_by_email(email):
-            flash('Пользователь с таким email уже существует!', 'error')
-            return render_template('register.html')
-        
         # Создание нового пользователя в Supabase
         try:
-            result = create_user(username, email, password)
+            result = create_user(email, password)
             if result:
                 flash('Регистрация прошла успешно! Теперь вы можете войти в систему.', 'success')
                 return redirect(url_for('login'))
             else:
-                flash('Произошла ошибка при регистрации. Проверьте настройки Supabase.', 'error')
+                flash('Произошла ошибка при регистрации. Возможно, пользователь с таким email уже существует.', 'error')
         except Exception as e:
             logger.error(f"Ошибка при регистрации: {e}")
             flash('Произошла ошибка при регистрации. Попробуйте еще раз.', 'error')
@@ -137,19 +111,19 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
+        email = request.form['email']
         password = request.form['password']
         
         # Аутентифицируем пользователя
-        auth_result = authenticate_user(username, password)
+        auth_result = authenticate_user(email, password)
         
         if auth_result:
-            session['user_id'] = auth_result['profile']['id']
-            session['username'] = auth_result['profile']['username']
+            session['user_id'] = auth_result['user'].id
+            session['email'] = auth_result['user'].email
             flash('Вы успешно вошли в систему!', 'success')
             return redirect(url_for('dashboard'))
         else:
-            flash('Неверное имя пользователя или пароль!', 'error')
+            flash('Неверный email или пароль!', 'error')
     
     return render_template('login.html')
 
@@ -178,7 +152,7 @@ def dashboard():
     # Создаем объект пользователя для шаблона
     user = {
         'id': session['user_id'],
-        'username': session['username']
+        'email': session['email']
     }
     
     return render_template('dashboard.html', user=user, user_data=user_data_list)
@@ -269,15 +243,15 @@ def create_payment_intent():
         amount = int(request.json.get('amount', 1000))  # По умолчанию $10.00
         currency = request.json.get('currency', 'usd')
         
-        # Получаем данные пользователя из Supabase
-        user_data = get_user_by_username(session['username'])
-        if not user_data:
-            return jsonify({'error': 'Пользователь не найден'}), 404
+        # Получаем email из сессии
+        user_email = session.get('email')
+        if not user_email:
+            return jsonify({'error': 'Email пользователя не найден в сессии'}), 400
         
         # Создаем или получаем клиента Stripe
-        customer = stripe_manager.get_customer_by_email(user_data['email'])
+        customer = stripe_manager.get_customer_by_email(user_email)
         if not customer:
-            customer = stripe_manager.create_customer(user_data['email'], user_data['username'])
+            customer = stripe_manager.create_customer(user_email, user_email)
         
         if customer:
             # Создаем намерение платежа

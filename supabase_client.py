@@ -30,54 +30,10 @@ class SupabaseManager:
         """Проверяет, подключен ли клиент к Supabase"""
         return self.client is not None
     
-    def create_user(self, user_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def get_current_user(self) -> Optional[Dict[str, Any]]:
         """
-        Создает нового пользователя в Supabase
+        Получает текущего аутентифицированного пользователя
         
-        Args:
-            user_data: Словарь с данными пользователя
-            
-        Returns:
-            Словарь с данными созданного пользователя или None при ошибке
-        """
-        if not self.is_connected():
-            logger.error("Supabase клиент не подключен")
-            return None
-        
-        try:
-            # Создаем пользователя в auth.users
-            # Профиль автоматически создается через триггер в таблице profiles
-            auth_response = self.client.auth.sign_up({
-                "email": user_data.get('email'),
-                "password": user_data.get('password'),
-                "options": {
-                    "data": {
-                        "username": user_data.get('username'),
-                        "full_name": user_data.get('full_name', '')
-                    }
-                }
-            })
-            
-            if auth_response.user:
-                logger.info(f"Пользователь {user_data.get('username')} успешно создан")
-                return {
-                    'user': auth_response.user,
-                    'user_id': auth_response.user.id
-                }
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Ошибка при создании пользователя: {e}")
-            return None
-    
-    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
-        """
-        Получает пользователя по email из profiles
-        
-        Args:
-            email: Email пользователя
-            
         Returns:
             Словарь с данными пользователя или None
         """
@@ -85,50 +41,10 @@ class SupabaseManager:
             return None
         
         try:
-            response = self.client.table('profiles').select('*').eq('email', email).execute()
-            return response.data[0] if response.data else None
+            user = self.client.auth.get_user()
+            return user.user if user else None
         except Exception as e:
-            logger.error(f"Ошибка при получении пользователя по email: {e}")
-            return None
-    
-    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
-        """
-        Получает пользователя по имени пользователя из profiles
-        
-        Args:
-            username: Имя пользователя
-            
-        Returns:
-            Словарь с данными пользователя или None
-        """
-        if not self.is_connected():
-            return None
-        
-        try:
-            response = self.client.table('profiles').select('*').eq('username', username).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            logger.error(f"Ошибка при получении пользователя по username: {e}")
-            return None
-    
-    def get_user_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Получает профиль пользователя по ID
-        
-        Args:
-            user_id: ID пользователя
-            
-        Returns:
-            Словарь с данными профиля или None
-        """
-        if not self.is_connected():
-            return None
-        
-        try:
-            response = self.client.table('profiles').select('*').eq('id', user_id).execute()
-            return response.data[0] if response.data else None
-        except Exception as e:
-            logger.error(f"Ошибка при получении профиля пользователя: {e}")
+            logger.error(f"Ошибка при получении текущего пользователя: {e}")
             return None
     
     def save_user_data(self, user_id: str, data_type: str, data_content: str, filename: str = None) -> Optional[Dict[str, Any]]:
