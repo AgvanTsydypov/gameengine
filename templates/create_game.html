@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Create Game - AI Game Studio{% endblock %}
+
+{% block content %}
+<main>
+  <section class="hero">
+    <div class="kicker"><span class="dot"></span>BUILD • ITERATE • PUBLISH</div>
+    <h1>CREATE NEW GAME</h1>
+    <p class="sub">Design your pixel-perfect game with AI assistance</p>
+  </section>
+
+  <section class="section">
+    <div style="max-width: 800px; margin: 0 auto;">
+      <div style="border: 2px solid var(--line); background: var(--card); padding: 24px;">
+        <h2 style="color: var(--cyber); margin-bottom: 20px; text-align: center;">GAME CREATOR</h2>
+        
+        <form id="create-game-form">
+          <div class="form-group">
+            <label class="form-label" for="game-title">GAME TITLE</label>
+            <input class="form-input" type="text" id="game-title" name="title" required placeholder="Enter your game title">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="game-category">CATEGORY</label>
+            <select class="form-input" id="game-category" name="category" required>
+              <option value="">Select category</option>
+              <option value="arcade">ARCADE</option>
+              <option value="shooter">SHOOTER</option>
+              <option value="adventure">ADVENTURE</option>
+              <option value="racing">RACING</option>
+              <option value="strategy">STRATEGY</option>
+              <option value="platform">PLATFORM</option>
+              <option value="puzzle">PUZZLE</option>
+              <option value="rpg">RPG</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="game-description">DESCRIPTION</label>
+            <textarea class="form-input" id="game-description" name="description" rows="4" required placeholder="Describe your game concept..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="game-style">ART STYLE</label>
+            <select class="form-input" id="game-style" name="style" required>
+              <option value="">Select art style</option>
+              <option value="8bit">8-BIT RETRO</option>
+              <option value="16bit">16-BIT CLASSIC</option>
+              <option value="pixel">MODERN PIXEL</option>
+              <option value="neon">NEON CYBER</option>
+              <option value="space">SPACE THEME</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="game-complexity">COMPLEXITY</label>
+            <select class="form-input" id="game-complexity" name="complexity" required>
+              <option value="">Select complexity</option>
+              <option value="simple">SIMPLE - Quick to build</option>
+              <option value="medium">MEDIUM - Balanced features</option>
+              <option value="complex">COMPLEX - Full-featured</option>
+            </select>
+          </div>
+
+          <button class="btn btn-cta form-submit" type="submit" style="margin-top: 16px;">
+            <span>🚀 GENERATE GAME</span>
+          </button>
+        </form>
+
+        <div id="generation-status" style="display: none; text-align: center; margin-top: 20px;">
+          <div class="loading-animation">
+            <span style="color: var(--cyber);">GENERATING YOUR GAME</span>
+            <div style="margin-top: 10px;">
+              <span class="loading-dots">...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mock game preview -->
+      <div id="game-preview" style="display: none; margin-top: 40px; border: 2px solid var(--cyber); background: var(--card); padding: 24px;">
+        <h2 style="color: var(--cyber); margin-bottom: 16px;">GAME PREVIEW</h2>
+        <div style="background: var(--bg); border: 2px solid var(--line); height: 300px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+          <span style="color: var(--muted); font-size: 10px;">GAME PREVIEW WILL APPEAR HERE</span>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+          <button class="btn btn-cta" onclick="publishGame()"><span>PUBLISH GAME</span></button>
+          <button class="btn btn-ghost" onclick="editGame()"><span>EDIT CODE</span></button>
+          <button class="btn btn-ghost" onclick="playTest()"><span>PLAYTEST</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('create-game-form');
+  const status = document.getElementById('generation-status');
+  const preview = document.getElementById('game-preview');
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Show loading state
+    form.style.display = 'none';
+    status.style.display = 'block';
+    
+    // Simulate game generation
+    setTimeout(() => {
+      status.style.display = 'none';
+      preview.style.display = 'block';
+      App.showAlert('Game generated successfully!', 'success');
+    }, 3000);
+  });
+});
+
+function publishGame() {
+  App.showAlert('Publishing game... (Mock functionality)', 'info');
+}
+
+function editGame() {
+  App.showAlert('Opening code editor... (Mock functionality)', 'info');
+}
+
+function playTest() {
+  App.showAlert('Starting playtest... (Mock functionality)', 'info');
+}
+</script>
+
+<style>
+.loading-dots {
+  animation: dots 1.5s infinite;
+}
+
+@keyframes dots {
+  0%, 20% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
+</style>
+{% endblock %}

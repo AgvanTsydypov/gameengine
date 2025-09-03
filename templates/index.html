@@ -1,56 +1,111 @@
 {% extends "base.html" %}
 
-{% block title %}Главная - Мое приложение{% endblock %}
+{% block title %}AI Game Studio — Pixel{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="jumbotron bg-primary text-white rounded p-5 mb-4">
-            <h1 class="display-4">
-                <i class="fas fa-cloud-upload-alt"></i> Добро пожаловать!
-            </h1>
-            <p class="lead">Безопасное хранение и управление вашими данными в облаке</p>
-            <hr class="my-4">
-            <p>Зарегистрируйтесь или войдите в систему, чтобы начать работу с вашими файлами и данными.</p>
-            <div class="d-grid gap-2 d-md-flex justify-content-md-start">
-                <a class="btn btn-light btn-lg" href="{{ url_for('register') }}" role="button">
-                    <i class="fas fa-user-plus"></i> Регистрация
-                </a>
-                <a class="btn btn-outline-light btn-lg" href="{{ url_for('login') }}" role="button">
-                    <i class="fas fa-sign-in-alt"></i> Войти
-                </a>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-4 mb-4">
-                <div class="card h-100">
-                    <div class="card-body text-center">
-                        <i class="fas fa-shield-alt fa-3x text-primary mb-3"></i>
-                        <h5 class="card-title">Безопасность</h5>
-                        <p class="card-text">Ваши данные защищены современными методами шифрования и безопасного хранения.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4 mb-4">
-                <div class="card h-100">
-                    <div class="card-body text-center">
-                        <i class="fas fa-cloud fa-3x text-primary mb-3"></i>
-                        <h5 class="card-title">Облачное хранение</h5>
-                        <p class="card-text">Доступ к вашим файлам и данным с любого устройства в любое время.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4 mb-4">
-                <div class="card h-100">
-                    <div class="card-body text-center">
-                        <i class="fas fa-mobile-alt fa-3x text-primary mb-3"></i>
-                        <h5 class="card-title">Удобство</h5>
-                        <p class="card-text">Интуитивно понятный интерфейс для управления вашими данными.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+<main>
+  <section class="hero">
+    <div class="kicker"><span class="dot"></span>MINIMAL • PIXEL • SPACE</div>
+    <h1>BUILD AI GAMES. <br/> SHIP FAST. LOOK STELLAR.</h1>
+    <p class="sub">Generate, iterate, and publish — all in one pixel-perfect studio. No noise. Just play.</p>
+    <div class="hero-cta">
+      {% if session.user_id %}
+        <a class="btn btn-cta" href="{{ url_for('create_game') }}"><span>+ CREATE NEW GAME</span></a>
+        <a class="btn btn-ghost" href="{{ url_for('games') }}"><span>EXPLORE TRENDING</span></a>
+      {% else %}
+        <a class="btn btn-cta auth-required" href="#" id="create-game-btn"><span>+ CREATE NEW GAME</span></a>
+        <a class="btn btn-ghost" href="{{ url_for('games') }}"><span>EXPLORE TRENDING</span></a>
+      {% endif %}
     </div>
+  </section>
+
+  <section id="trending" class="section" aria-labelledby="trend-title">
+    <h2 id="trend-title">TRENDING GAMES</h2>
+    <div class="grid">
+      <a href="{{ url_for('play_game', game_id=1) }}" class="card" aria-label="Play game: Pixel Odyssey">
+        <div class="thumb">
+          <span class="badge px-border">★ 4.8</span>
+        </div>
+        <div class="title">PIXEL ODYSSEY</div>
+        <div class="meta">ARCADE • 3.4K PLAYS</div>
+      </a>
+      <a href="{{ url_for('play_game', game_id=2) }}" class="card" aria-label="Play game: Cosmic Invaders">
+        <div class="thumb">
+          <span class="badge px-border">★ 4.7</span>
+        </div>
+        <div class="title">COSMIC INVADERS</div>
+        <div class="meta">SHOOTER • 5.1K PLAYS</div>
+      </a>
+      <a href="{{ url_for('play_game', game_id=3) }}" class="card" aria-label="Play game: Neon Quest">
+        <div class="thumb">
+          <span class="badge px-border">★ 4.6</span>
+        </div>
+        <div class="title">NEON QUEST</div>
+        <div class="meta">ADVENTURE • 2.0K PLAYS</div>
+      </a>
+    </div>
+  </section>
+</main>
+
+<!-- Login Modal -->
+<div class="modal-overlay" id="login-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 class="modal-title">LOGIN</h3>
+      <button class="modal-close" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="login-alert"></div>
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="login-email">EMAIL</label>
+          <input class="form-input" type="email" id="login-email" name="email" required placeholder="your@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">PASSWORD</label>
+          <input class="form-input" type="password" id="login-password" name="password" required placeholder="••••••••">
+        </div>
+        <button class="btn btn-cta form-submit" type="submit">
+          <span>LOGIN</span>
+        </button>
+      </form>
+      <div class="auth-switch">
+        <p>NEW TO THE GALAXY? <a href="#" id="switch-to-register">CREATE ACCOUNT</a></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Register Modal -->
+<div class="modal-overlay" id="register-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 class="modal-title">CREATE ACCOUNT</h3>
+      <button class="modal-close" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="register-alert"></div>
+      <form id="register-form">
+        <div class="form-group">
+          <label class="form-label" for="register-email">EMAIL</label>
+          <input class="form-input" type="email" id="register-email" name="email" required placeholder="your@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="register-password">PASSWORD</label>
+          <input class="form-input" type="password" id="register-password" name="password" required placeholder="••••••••">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="register-confirm-password">CONFIRM PASSWORD</label>
+          <input class="form-input" type="password" id="register-confirm-password" name="confirm_password" required placeholder="••••••••">
+        </div>
+        <button class="btn btn-cta form-submit" type="submit">
+          <span>CREATE ACCOUNT</span>
+        </button>
+      </form>
+      <div class="auth-switch">
+        <p>ALREADY HAVE AN ACCOUNT? <a href="#" id="switch-to-login">LOGIN</a></p>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

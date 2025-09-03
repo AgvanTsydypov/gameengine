@@ -6,55 +6,55 @@ from config import config
 from supabase_client import supabase_manager
 from stripe_client import stripe_manager
 
-# Настройка логирования
+# Logging configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Загружаем конфигурацию
+# Load configuration
 config_name = os.getenv('FLASK_ENV', 'development')
 app.config.from_object(config[config_name])
 
-# Функции для работы с пользователями через Supabase
+# User management functions via Supabase
 def create_user(email, password):
-    """Создает нового пользователя в Supabase Auth"""
+    """Creates a new user in Supabase Auth"""
     if not supabase_manager.is_connected():
-        logger.error("Supabase не подключен для создания пользователя")
+        logger.error("Supabase not connected for user creation")
         return None
     
     try:
-        logger.info(f"Создание пользователя: email={email}")
+        logger.info(f"Creating user: email={email}")
         
-        # Создаем пользователя в auth.users только с email и паролем
+        # Create user in auth.users with email and password only
         auth_response = supabase_manager.client.auth.sign_up({
             "email": email,
             "password": password
         })
         
         if auth_response.user:
-            logger.info(f"Пользователь {email} успешно создан в auth.users с ID: {auth_response.user.id}")
+            logger.info(f"User {email} successfully created in auth.users with ID: {auth_response.user.id}")
             
             return {
                 'user': auth_response.user,
                 'user_id': auth_response.user.id
             }
         
-        logger.error("Не удалось создать пользователя в auth.users")
+        logger.error("Failed to create user in auth.users")
         return None
         
     except Exception as e:
-        logger.error(f"Ошибка при создании пользователя: {e}")
+        logger.error(f"Error creating user: {e}")
         return None
 
 def authenticate_user(email, password):
-    """Аутентифицирует пользователя через Supabase Auth"""
+    """Authenticates user via Supabase Auth"""
     if not supabase_manager.is_connected():
-        logger.error("Supabase не подключен")
+        logger.error("Supabase not connected")
         return None
     
     try:
-        logger.info(f"Попытка аутентификации пользователя: {email}")
+        logger.info(f"Authentication attempt for user: {email}")
         
         auth_response = supabase_manager.client.auth.sign_in_with_password({
             "email": email,
@@ -62,25 +62,24 @@ def authenticate_user(email, password):
         })
         
         if auth_response.user:
-            logger.info(f"Успешная аутентификация для {email}")
+            logger.info(f"Successful authentication for {email}")
             return {
                 'user': auth_response.user,
                 'email': auth_response.user.email
             }
         
-        logger.warning(f"Неверный пароль для {email}")
+        logger.warning(f"Invalid password for {email}")
         return None
         
     except Exception as e:
-        logger.error(f"Ошибка при аутентификации {email}: {e}")
+        logger.error(f"Authentication error for {email}: {e}")
         return None
 
-# Маршруты
+# Routes
 @app.route('/')
 def index():
-    if 'user_id' in session:
-        return redirect(url_for('dashboard'))
-    return render_template('index.html')
+    authenticated = 'user_id' in session
+    return render_template('index.html', authenticated=authenticated)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -89,22 +88,42 @@ def register():
         password = request.form['password']
         confirm_password = request.form['confirm_password']
         
-        # Валидация
+        # Validation
         if password != confirm_password:
-            flash('Пароли не совпадают!', 'error')
-            return render_template('register.html')
+            error_msg = 'Passwords do not match!'
+            # Check if this is an AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                return jsonify({'success': False, 'error': error_msg}), 400
+            else:
+                flash(error_msg, 'error')
+                return render_template('register.html')
         
-        # Создание нового пользователя в Supabase
+        # Create new user in Supabase
         try:
             result = create_user(email, password)
             if result:
-                flash('Регистрация прошла успешно! Теперь вы можете войти в систему.', 'success')
-                return redirect(url_for('login'))
+                success_msg = 'Registration successful! You can now log in.'
+                # Check if this is an AJAX request
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                    return jsonify({'success': True, 'message': success_msg})
+                else:
+                    flash(success_msg, 'success')
+                    return redirect(url_for('login'))
             else:
-                flash('Произошла ошибка при регистрации. Возможно, пользователь с таким email уже существует.', 'error')
+                error_msg = 'Registration failed. A user with this email may already exist.'
+                # Check if this is an AJAX request
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                    return jsonify({'success': False, 'error': error_msg}), 400
+                else:
+                    flash(error_msg, 'error')
         except Exception as e:
-            logger.error(f"Ошибка при регистрации: {e}")
-            flash('Произошла ошибка при регистрации. Попробуйте еще раз.', 'error')
+            logger.error(f"Registration error: {e}")
+            error_msg = 'Registration failed. Please try again.'
+            # Check if this is an AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                return jsonify({'success': False, 'error': error_msg}), 500
+            else:
+                flash(error_msg, 'error')
     
     return render_template('register.html')
 
@@ -114,66 +133,150 @@ def login():
         email = request.form['email']
         password = request.form['password']
         
-        # Аутентифицируем пользователя
+        # Authenticate user
         auth_result = authenticate_user(email, password)
         
         if auth_result:
             session['user_id'] = auth_result['user'].id
             session['email'] = auth_result['user'].email
-            flash('Вы успешно вошли в систему!', 'success')
-            return redirect(url_for('dashboard'))
+            
+            # Check if this is an AJAX request (from modal)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                # For AJAX requests, return JSON - stay on same page
+                return jsonify({'success': True, 'stay_on_page': True})
+            else:
+                flash('Successfully logged in!', 'success')
+                return redirect(url_for('index'))
         else:
-            flash('Неверный email или пароль!', 'error')
+            # Check if this is an AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                return jsonify({'success': False, 'error': 'Invalid email or password!'}), 400
+            else:
+                flash('Invalid email or password!', 'error')
     
     return render_template('login.html')
 
 @app.route('/logout')
 def logout():
-    # Выходим из Supabase Auth
+    # Sign out from Supabase Auth
     if supabase_manager.is_connected():
         try:
             supabase_manager.client.auth.sign_out()
         except Exception as e:
-            logger.error(f"Ошибка при выходе из Supabase Auth: {e}")
+            logger.error(f"Supabase Auth logout error: {e}")
     
-    # Очищаем сессию Flask
+    # Clear Flask session
     session.clear()
-    flash('Вы вышли из системы.', 'info')
+    flash('Successfully logged out.', 'info')
     return redirect(url_for('index'))
 
-@app.route('/dashboard')
-def dashboard():
+@app.route('/games')
+def games():
+    """Trending games page - accessible without login"""
+    # Mock games data
+    mock_games = [
+        {
+            'id': 1,
+            'title': 'PIXEL ODYSSEY',
+            'category': 'ARCADE',
+            'plays': '3.4K',
+            'rating': 4.8,
+            'description': 'An epic pixel adventure through space and time'
+        },
+        {
+            'id': 2,
+            'title': 'COSMIC INVADERS',
+            'category': 'SHOOTER',
+            'plays': '5.1K',
+            'rating': 4.7,
+            'description': 'Defend Earth from alien invaders in this retro shooter'
+        },
+        {
+            'id': 3,
+            'title': 'NEON QUEST',
+            'category': 'ADVENTURE',
+            'plays': '2.0K',
+            'rating': 4.6,
+            'description': 'Navigate through neon-lit cyberpunk worlds'
+        },
+        {
+            'id': 4,
+            'title': 'RETRO RACER',
+            'category': 'RACING',
+            'plays': '4.2K',
+            'rating': 4.5,
+            'description': 'High-speed pixel racing action'
+        },
+        {
+            'id': 5,
+            'title': 'STARSHIP COMMANDER',
+            'category': 'STRATEGY',
+            'plays': '1.8K',
+            'rating': 4.9,
+            'description': 'Command your fleet in epic space battles'
+        },
+        {
+            'id': 6,
+            'title': 'PIXEL PLATFORMER',
+            'category': 'PLATFORM',
+            'plays': '3.7K',
+            'rating': 4.4,
+            'description': 'Classic platforming with modern pixel art'
+        }
+    ]
+    
+    authenticated = 'user_id' in session
+    return render_template('games.html', games=mock_games, authenticated=authenticated)
+
+@app.route('/create-game')
+def create_game():
+    """Create game page - requires authentication"""
     if 'user_id' not in session:
-        return redirect(url_for('login'))
+        flash('Please log in to create a game.', 'error')
+        return redirect(url_for('index'))
     
-    # Получаем данные пользователя из Supabase
-    user_data_list = supabase_manager.get_user_data(session['user_id'])
-    
-    # Создаем объект пользователя для шаблона
-    user = {
-        'id': session['user_id'],
-        'email': session['email']
+    authenticated = 'user_id' in session
+    return render_template('create_game.html', authenticated=authenticated)
+
+@app.route('/play/<int:game_id>')
+def play_game(game_id):
+    """Play a specific game - mock for now"""
+    # Mock game data
+    mock_games = {
+        1: {'title': 'PIXEL ODYSSEY', 'category': 'ARCADE'},
+        2: {'title': 'COSMIC INVADERS', 'category': 'SHOOTER'},
+        3: {'title': 'NEON QUEST', 'category': 'ADVENTURE'},
+        4: {'title': 'RETRO RACER', 'category': 'RACING'},
+        5: {'title': 'STARSHIP COMMANDER', 'category': 'STRATEGY'},
+        6: {'title': 'PIXEL PLATFORMER', 'category': 'PLATFORM'}
     }
     
-    return render_template('dashboard.html', user=user, user_data=user_data_list)
+    game = mock_games.get(game_id)
+    if not game:
+        flash('Game not found.', 'error')
+        return redirect(url_for('games'))
+    
+    authenticated = 'user_id' in session
+    return render_template('play_game.html', game=game, game_id=game_id, authenticated=authenticated)
 
+# Legacy routes for backward compatibility
 @app.route('/save_data', methods=['POST'])
 def save_data():
     if 'user_id' not in session:
-        return jsonify({'error': 'Необходима авторизация'}), 401
+        return jsonify({'error': 'Authentication required'}), 401
     
     data_type = request.form.get('data_type', 'text')
     data_content = request.form.get('data_content', '')
     filename = request.form.get('filename', '')
     
     if not data_content:
-        return jsonify({'error': 'Содержимое не может быть пустым'}), 400
+        return jsonify({'error': 'Content cannot be empty'}), 400
     
     if not supabase_manager.is_connected():
-        return jsonify({'error': 'Supabase не подключен. Проверьте настройки.'}), 500
+        return jsonify({'error': 'Supabase not connected. Check settings.'}), 500
     
     try:
-        # Сохраняем только в Supabase
+        # Save to Supabase only
         result = supabase_manager.save_user_data(
             user_id=str(session['user_id']),
             data_type=data_type,
@@ -182,79 +285,79 @@ def save_data():
         )
         
         if result:
-            logger.info("Данные сохранены в Supabase")
-            return jsonify({'success': True, 'message': 'Данные сохранены успешно'})
+            logger.info("Data saved to Supabase")
+            return jsonify({'success': True, 'message': 'Data saved successfully'})
         else:
-            return jsonify({'error': 'Ошибка при сохранении данных в Supabase'}), 500
+            return jsonify({'error': 'Error saving data to Supabase'}), 500
             
     except Exception as e:
-        logger.error(f"Ошибка при сохранении данных: {e}")
-        return jsonify({'error': 'Ошибка при сохранении данных'}), 500
+        logger.error(f"Error saving data: {e}")
+        return jsonify({'error': 'Error saving data'}), 500
 
 @app.route('/delete_data/<data_id>', methods=['POST'])
 def delete_data(data_id):
     if 'user_id' not in session:
-        return jsonify({'error': 'Необходима авторизация'}), 401
+        return jsonify({'error': 'Authentication required'}), 401
     
     if not supabase_manager.is_connected():
-        return jsonify({'error': 'Supabase не подключен. Проверьте настройки.'}), 500
+        return jsonify({'error': 'Supabase not connected. Check settings.'}), 500
     
     try:
-        # Удаляем только из Supabase
+        # Delete from Supabase only
         result = supabase_manager.delete_user_data(
             data_id=str(data_id),
             user_id=str(session['user_id'])
         )
         
         if result:
-            logger.info("Данные удалены из Supabase")
-            return jsonify({'success': True, 'message': 'Данные удалены успешно'})
+            logger.info("Data deleted from Supabase")
+            return jsonify({'success': True, 'message': 'Data deleted successfully'})
         else:
-            return jsonify({'error': 'Данные не найдены или ошибка при удалении'}), 404
+            return jsonify({'error': 'Data not found or error deleting'}), 404
             
     except Exception as e:
-        logger.error(f"Ошибка при удалении данных: {e}")
-        return jsonify({'error': 'Ошибка при удалении данных'}), 500
+        logger.error(f"Error deleting data: {e}")
+        return jsonify({'error': 'Error deleting data'}), 500
 
-# Заглушка для Stripe интеграции
+# Stripe integration stub
 @app.route('/payment')
 def payment():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
     if stripe_manager.is_configured():
-        # TODO: Реализовать полную интеграцию со Stripe
-        flash('Интеграция со Stripe настроена, но функционал оплаты еще в разработке', 'info')
+        # TODO: Implement full Stripe integration
+        flash('Stripe integration configured, but payment functionality is in development', 'info')
     else:
-        flash('Stripe не настроен. Функция оплаты будет доступна после настройки', 'warning')
+        flash('Stripe not configured. Payment feature will be available after setup', 'warning')
     
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('index'))
 
 @app.route('/create_payment_intent', methods=['POST'])
 def create_payment_intent():
-    """Создает намерение платежа через Stripe"""
+    """Creates payment intent via Stripe"""
     if 'user_id' not in session:
-        return jsonify({'error': 'Необходима авторизация'}), 401
+        return jsonify({'error': 'Authentication required'}), 401
     
     if not stripe_manager.is_configured():
-        return jsonify({'error': 'Stripe не настроен'}), 400
+        return jsonify({'error': 'Stripe not configured'}), 400
     
     try:
-        amount = int(request.json.get('amount', 1000))  # По умолчанию $10.00
+        amount = int(request.json.get('amount', 1000))  # Default $10.00
         currency = request.json.get('currency', 'usd')
         
-        # Получаем email из сессии
+        # Get email from session
         user_email = session.get('email')
         if not user_email:
-            return jsonify({'error': 'Email пользователя не найден в сессии'}), 400
+            return jsonify({'error': 'User email not found in session'}), 400
         
-        # Создаем или получаем клиента Stripe
+        # Create or get Stripe customer
         customer = stripe_manager.get_customer_by_email(user_email)
         if not customer:
             customer = stripe_manager.create_customer(user_email, user_email)
         
         if customer:
-            # Создаем намерение платежа
+            # Create payment intent
             intent = stripe_manager.create_payment_intent(
                 amount=amount,
                 currency=currency,
@@ -268,18 +371,18 @@ def create_payment_intent():
                     'customer_id': customer.id
                 })
         
-        return jsonify({'error': 'Не удалось создать намерение платежа'}), 500
+        return jsonify({'error': 'Failed to create payment intent'}), 500
         
     except Exception as e:
-        logger.error(f"Ошибка при создании намерения платежа: {e}")
-        return jsonify({'error': 'Ошибка при создании платежа'}), 500
+        logger.error(f"Error creating payment intent: {e}")
+        return jsonify({'error': 'Error creating payment'}), 500
 
 if __name__ == '__main__':
-    # Проверяем подключение к Supabase
+    # Check Supabase connection
     if supabase_manager.is_connected():
-        logger.info("✅ Supabase подключен")
+        logger.info("✅ Supabase connected")
     else:
-        logger.warning("⚠️  Supabase не подключен. Проверьте настройки в .env")
+        logger.warning("⚠️  Supabase not connected. Check .env settings")
     
     port = app.config.get('PORT', 5000)
     app.run(debug=True, host='0.0.0.0', port=port)
