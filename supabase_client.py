@@ -1,5 +1,5 @@
 """
-Модуль для работы с Supabase
+Supabase Client Module
 """
 import os
 from supabase import create_client, Client
@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SupabaseManager:
-    """Класс для управления подключением к Supabase"""
+    """Class for managing Supabase connection"""
     
     def __init__(self):
         self.url = os.getenv('SUPABASE_URL')
@@ -20,22 +20,22 @@ class SupabaseManager:
         if self.url and self.key:
             try:
                 self.client = create_client(self.url, self.key)
-                logger.info("Supabase клиент успешно инициализирован")
+                logger.info("Supabase client successfully initialized")
             except Exception as e:
-                logger.error(f"Ошибка при инициализации Supabase клиента: {e}")
+                logger.error(f"Error initializing Supabase client: {e}")
         else:
-            logger.warning("Supabase URL или ключ не настроены")
+            logger.warning("Supabase URL or key not configured")
     
     def is_connected(self) -> bool:
-        """Проверяет, подключен ли клиент к Supabase"""
+        """Checks if client is connected to Supabase"""
         return self.client is not None
     
     def get_current_user(self) -> Optional[Dict[str, Any]]:
         """
-        Получает текущего аутентифицированного пользователя
+        Gets current authenticated user
         
         Returns:
-            Словарь с данными пользователя или None
+            Dictionary with user data or None
         """
         if not self.is_connected():
             return None
@@ -44,21 +44,21 @@ class SupabaseManager:
             user = self.client.auth.get_user()
             return user.user if user else None
         except Exception as e:
-            logger.error(f"Ошибка при получении текущего пользователя: {e}")
+            logger.error(f"Error getting current user: {e}")
             return None
     
     def save_user_data(self, user_id: str, data_type: str, data_content: str, filename: str = None) -> Optional[Dict[str, Any]]:
         """
-        Сохраняет данные пользователя в Supabase
+        Saves user data to Supabase
         
         Args:
-            user_id: ID пользователя
-            data_type: Тип данных
-            data_content: Содержимое данных
-            filename: Имя файла (опционально)
+            user_id: User ID
+            data_type: Data type
+            data_content: Data content
+            filename: File name (optional)
             
         Returns:
-            Словарь с данными сохраненной записи или None при ошибке
+            Dictionary with saved record data or None on error
         """
         if not self.is_connected():
             return None

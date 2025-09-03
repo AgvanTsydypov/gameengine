@@ -32,6 +32,8 @@ def create_user(email, password):
             "password": password
         })
         
+        logger.info(f"Auth response: {auth_response}")
+        
         if auth_response.user:
             logger.info(f"User {email} successfully created in auth.users with ID: {auth_response.user.id}")
             
@@ -39,12 +41,15 @@ def create_user(email, password):
                 'user': auth_response.user,
                 'user_id': auth_response.user.id
             }
-        
-        logger.error("Failed to create user in auth.users")
-        return None
+        else:
+            logger.error(f"Failed to create user - no user in response: {auth_response}")
+            return None
         
     except Exception as e:
         logger.error(f"Error creating user: {e}")
+        logger.error(f"Exception type: {type(e)}")
+        if hasattr(e, 'response'):
+            logger.error(f"Response: {e.response}")
         return None
 
 def authenticate_user(email, password):
@@ -61,18 +66,23 @@ def authenticate_user(email, password):
             "password": password
         })
         
+        logger.info(f"Auth response: {auth_response}")
+        
         if auth_response.user:
             logger.info(f"Successful authentication for {email}")
             return {
                 'user': auth_response.user,
                 'email': auth_response.user.email
             }
-        
-        logger.warning(f"Invalid password for {email}")
-        return None
+        else:
+            logger.warning(f"Invalid credentials for {email} - no user in response")
+            return None
         
     except Exception as e:
         logger.error(f"Authentication error for {email}: {e}")
+        logger.error(f"Exception type: {type(e)}")
+        if hasattr(e, 'response'):
+            logger.error(f"Response: {e.response}")
         return None
 
 # Routes
