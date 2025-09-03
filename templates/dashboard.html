@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Панель управления - Мое приложение{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-tachometer-alt"></i> Панель управления</h2>
+            <span class="text-muted">Добро пожаловать, {{ user.username }}!</span>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-plus"></i> Добавить данные</h5>
+            </div>
+            <div class="card-body">
+                <form id="dataForm">
+                    <div class="mb-3">
+                        <label for="data_type" class="form-label">Тип данных</label>
+                        <select class="form-select" id="data_type" name="data_type">
+                            <option value="text">Текст</option>
+                            <option value="file">Файл</option>
+                            <option value="json">JSON</option>
+                            <option value="note">Заметка</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="filename" class="form-label">Имя файла (опционально)</label>
+                        <input type="text" class="form-control" id="filename" name="filename" placeholder="my_file.txt">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="data_content" class="form-label">Содержимое</label>
+                        <textarea class="form-control" id="data_content" name="data_content" rows="6" required></textarea>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Сохранить
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-database"></i> Ваши данные</h5>
+            </div>
+            <div class="card-body">
+                {% if user_data %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Тип</th>
+                                    <th>Имя файла</th>
+                                    <th>Содержимое</th>
+                                    <th>Дата создания</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for data in user_data %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-{{ 'primary' if data.data_type == 'text' else 'success' if data.data_type == 'file' else 'info' if data.data_type == 'json' else 'warning' }}">
+                                            {{ data.data_type }}
+                                        </span>
+                                    </td>
+                                    <td>{{ data.filename or 'Без имени' }}</td>
+                                    <td>
+                                        <div class="text-truncate" style="max-width: 200px;" title="{{ data.data_content }}">
+                                            {{ data.data_content[:100] }}{% if data.data_content|length > 100 %}...{% endif %}
+                                        </div>
+                                    </td>
+                                    <td>{{ data.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="viewData({{ data.id }})">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteData({{ data.id }})">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">У вас пока нет сохраненных данных. Добавьте что-нибудь!</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для просмотра данных -->
+<div class="modal fade" id="dataModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Просмотр данных</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="modalContent" class="bg-light p-3 rounded"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('dataForm');
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(form);
+        
+        fetch('/save_data', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Данные сохранены успешно!', 'success');
+                form.reset();
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showAlert(data.error || 'Ошибка при сохранении данных', 'danger');
+            }
+        })
+        .catch(error => {
+            showAlert('Произошла ошибка при сохранении данных', 'danger');
+        });
+    });
+});
+
+function viewData(dataId) {
+    // Найти данные в таблице и показать в модальном окне
+    const row = document.querySelector(`button[onclick="viewData(${dataId})"]`).closest('tr');
+    const content = row.querySelector('.text-truncate').getAttribute('title');
+    
+    document.getElementById('modalContent').textContent = content;
+    new bootstrap.Modal(document.getElementById('dataModal')).show();
+}
+
+function deleteData(dataId) {
+    if (confirm('Вы уверены, что хотите удалить эти данные?')) {
+        fetch(`/delete_data/${dataId}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Данные удалены успешно!', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showAlert(data.error || 'Ошибка при удалении данных', 'danger');
+            }
+        })
+        .catch(error => {
+            showAlert('Произошла ошибка при удалении данных', 'danger');
+        });
+    }
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.querySelector('main .container').insertBefore(alertDiv, document.querySelector('main .container').firstChild);
+    
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 5000);
+}
+</script>
+{% endblock %}

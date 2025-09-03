@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Главная - Мое приложение{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="jumbotron bg-primary text-white rounded p-5 mb-4">
+            <h1 class="display-4">
+                <i class="fas fa-cloud-upload-alt"></i> Добро пожаловать!
+            </h1>
+            <p class="lead">Безопасное хранение и управление вашими данными в облаке</p>
+            <hr class="my-4">
+            <p>Зарегистрируйтесь или войдите в систему, чтобы начать работу с вашими файлами и данными.</p>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                <a class="btn btn-light btn-lg" href="{{ url_for('register') }}" role="button">
+                    <i class="fas fa-user-plus"></i> Регистрация
+                </a>
+                <a class="btn btn-outline-light btn-lg" href="{{ url_for('login') }}" role="button">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </a>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-shield-alt fa-3x text-primary mb-3"></i>
+                        <h5 class="card-title">Безопасность</h5>
+                        <p class="card-text">Ваши данные защищены современными методами шифрования и безопасного хранения.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-cloud fa-3x text-primary mb-3"></i>
+                        <h5 class="card-title">Облачное хранение</h5>
+                        <p class="card-text">Доступ к вашим файлам и данным с любого устройства в любое время.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-mobile-alt fa-3x text-primary mb-3"></i>
+                        <h5 class="card-title">Удобство</h5>
+                        <p class="card-text">Интуитивно понятный интерфейс для управления вашими данными.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
