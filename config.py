@@ -12,9 +12,9 @@ class Config:
     FLASK_ENV = os.getenv('FLASK_ENV', 'development')
     DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
     
-    # База данных
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///app.db')
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # База данных (удалено - используем только Supabase)
+    # SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///app.db')
+    # SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Supabase настройки
     SUPABASE_URL = os.getenv('SUPABASE_URL', '')
@@ -42,23 +42,23 @@ class Config:
     LOG_FILE = os.getenv('LOG_FILE', 'app.log')
     
     # Порт приложения
-    PORT = int(os.getenv('PORT', 5000))
+    PORT = int(os.getenv('PORT', 8000))
 
 class DevelopmentConfig(Config):
     """Конфигурация для разработки"""
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///app_dev.db')
+    # SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///app_dev.db')
 
 class ProductionConfig(Config):
     """Конфигурация для продакшена"""
     DEBUG = False
     SESSION_COOKIE_SECURE = True
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost/app_prod')
+    # SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost/app_prod')
 
 class TestingConfig(Config):
     """Конфигурация для тестирования"""
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    # SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
 
 # Словарь конфигураций

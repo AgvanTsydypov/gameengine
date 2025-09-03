@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
-from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
 import logging
@@ -51,27 +50,11 @@ def create_user(username, email, password):
 
 def get_user_by_username(username):
     """Получает пользователя по имени пользователя"""
-    if not supabase_manager.is_connected():
-        return None
-    
-    try:
-        response = supabase_manager.client.table('users').select('*').eq('username', username).execute()
-        return response.data[0] if response.data else None
-    except Exception as e:
-        logger.error(f"Ошибка при получении пользователя: {e}")
-        return None
+    return supabase_manager.get_user_by_username(username)
 
 def get_user_by_email(email):
     """Получает пользователя по email"""
-    if not supabase_manager.is_connected():
-        return None
-    
-    try:
-        response = supabase_manager.client.table('users').select('*').eq('email', email).execute()
-        return response.data[0] if response.data else None
-    except Exception as e:
-        logger.error(f"Ошибка при получении пользователя по email: {e}")
-        return None
+    return supabase_manager.get_user_by_email(email)
 
 def authenticate_user(username, password):
     """Аутентифицирует пользователя через Supabase Auth"""
@@ -80,17 +63,17 @@ def authenticate_user(username, password):
         return None
     
     try:
-        # Получаем пользователя по username
-        user = get_user_by_username(username)
-        if not user:
+        # Получаем пользователя по username из profiles
+        profile = get_user_by_username(username)
+        if not profile:
             logger.warning(f"Пользователь {username} не найден")
             return None
         
-        logger.info(f"Найден пользователь: {user['email']}")
+        logger.info(f"Найден профиль пользователя: {profile['username']}")
         
-        # Используем Supabase Auth для проверки пароля
+        # Используем email из профиля для аутентификации
         auth_response = supabase_manager.client.auth.sign_in_with_password({
-            "email": user['email'],
+            "email": profile['email'],
             "password": password
         })
         
@@ -98,7 +81,7 @@ def authenticate_user(username, password):
             logger.info(f"Успешная аутентификация для {username}")
             return {
                 'user': auth_response.user,
-                'profile': user
+                'profile': profile
             }
         
         logger.warning(f"Неверный пароль для {username}")

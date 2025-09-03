@@ -46,6 +46,7 @@ class SupabaseManager:
         
         try:
             # Создаем пользователя в auth.users
+            # Профиль автоматически создается через триггер в таблице profiles
             auth_response = self.client.auth.sign_up({
                 "email": user_data.get('email'),
                 "password": user_data.get('password'),
@@ -58,22 +59,11 @@ class SupabaseManager:
             })
             
             if auth_response.user:
-                # Создаем профиль пользователя в public.users
-                profile_data = {
-                    "id": auth_response.user.id,
-                    "username": user_data.get('username'),
-                    "email": user_data.get('email'),
-                    "created_at": "now()"
+                logger.info(f"Пользователь {user_data.get('username')} успешно создан")
+                return {
+                    'user': auth_response.user,
+                    'user_id': auth_response.user.id
                 }
-                
-                profile_response = self.client.table('users').insert(profile_data).execute()
-                
-                if profile_response.data:
-                    logger.info(f"Пользователь {user_data.get('username')} успешно создан")
-                    return {
-                        'user': auth_response.user,
-                        'profile': profile_response.data[0]
-                    }
             
             return None
             
@@ -83,7 +73,7 @@ class SupabaseManager:
     
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """
-        Получает пользователя по email
+        Получает пользователя по email из profiles
         
         Args:
             email: Email пользователя
@@ -95,7 +85,7 @@ class SupabaseManager:
             return None
         
         try:
-            response = self.client.table('users').select('*').eq('email', email).execute()
+            response = self.client.table('profiles').select('*').eq('email', email).execute()
             return response.data[0] if response.data else None
         except Exception as e:
             logger.error(f"Ошибка при получении пользователя по email: {e}")
@@ -103,7 +93,7 @@ class SupabaseManager:
     
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
         """
-        Получает пользователя по имени пользователя
+        Получает пользователя по имени пользователя из profiles
         
         Args:
             username: Имя пользователя
@@ -115,10 +105,30 @@ class SupabaseManager:
             return None
         
         try:
-            response = self.client.table('users').select('*').eq('username', username).execute()
+            response = self.client.table('profiles').select('*').eq('username', username).execute()
             return response.data[0] if response.data else None
         except Exception as e:
             logger.error(f"Ошибка при получении пользователя по username: {e}")
+            return None
+    
+    def get_user_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Получает профиль пользователя по ID
+        
+        Args:
+            user_id: ID пользователя
+            
+        Returns:
+            Словарь с данными профиля или None
+        """
+        if not self.is_connected():
+            return None
+        
+        try:
+            response = self.client.table('profiles').select('*').eq('id', user_id).execute()
+            return response.data[0] if response.data else None
+        except Exception as e:
+            logger.error(f"Ошибка при получении профиля пользователя: {e}")
             return None
     
     def save_user_data(self, user_id: str, data_type: str, data_content: str, filename: str = None) -> Optional[Dict[str, Any]]:
