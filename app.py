@@ -376,6 +376,40 @@ def play_uploaded_game(game_id):
         flash('Error loading game. Please try again.', 'error')
         return redirect(url_for('my_games'))
 
+@app.route('/game-content/<game_id>')
+def get_game_content(game_id):
+    """Serve the HTML content of a game directly"""
+    if 'user_id' not in session:
+        return "Authentication required", 401
+    
+    try:
+        # Get the specific game data
+        user_games = supabase_manager.get_user_data(str(session['user_id']))
+        game = next((g for g in user_games if g.get('id') == game_id and g.get('data_type') == 'html_game'), None)
+        
+        if not game:
+            return "Game not found", 404
+        
+        # Fetch the HTML content from the storage URL
+        import requests
+        try:
+            response = requests.get(game['data_content'], timeout=10)
+            if response.status_code == 200:
+                # Return the HTML content with proper headers
+                return response.text, 200, {
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'X-Frame-Options': 'SAMEORIGIN'
+                }
+            else:
+                return f"Error loading game content: {response.status_code}", 500
+        except requests.RequestException as e:
+            logger.error(f"Error fetching game content: {e}")
+            return "Error loading game content", 500
+        
+    except Exception as e:
+        logger.error(f"Error serving game content: {e}")
+        return "Error loading game", 500
+
 # Legacy routes for backward compatibility
 @app.route('/save_data', methods=['POST'])
 def save_data():

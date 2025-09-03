@@ -43,10 +43,11 @@
           {% if game.data_content %}
             <iframe 
               id="game-frame"
-              src="{{ game.data_content }}" 
+              src="/game-content/{{ game.id }}" 
               style="width: 100%; height: 100%; border: none; background: #000;"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
-              loading="lazy">
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads"
+              loading="lazy"
+              allowfullscreen>
             </iframe>
           {% else %}
             <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--muted);">
@@ -85,7 +86,9 @@
   <iframe 
     id="fullscreen-frame"
     src="" 
-    style="width: 100%; height: 100%; border: none; background: #000;">
+    style="width: 100%; height: 100%; border: none; background: #000;"
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads"
+    allowfullscreen>
   </iframe>
 </div>
 {% endblock %}
@@ -124,7 +127,7 @@ function reloadGame() {
 function openInNewTab() {
   const gameFrame = document.getElementById('game-frame');
   if (gameFrame && gameFrame.src) {
-    window.open(gameFrame.src, '_blank');
+    window.open(gameFrame.src, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
   }
 }
 
