@@ -248,6 +248,89 @@ def create_game():
     authenticated = 'user_id' in session
     return render_template('create_game.html', authenticated=authenticated)
 
+@app.route('/upload-game', methods=['POST'])
+def upload_game():
+    """Handle HTML game file upload to Supabase storage"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    try:
+        # Get form data
+        title = request.form.get('title', '').strip()
+        description = request.form.get('description', '').strip()
+        game_file = request.files.get('game_file')
+        
+        # Validate input
+        if not title:
+            return jsonify({'error': 'Game title is required'}), 400
+        
+        if not description:
+            return jsonify({'error': 'Game description is required'}), 400
+        
+        if not game_file or game_file.filename == '':
+            return jsonify({'error': 'HTML file is required'}), 400
+        
+        # Validate file type
+        if not (game_file.filename.lower().endswith('.html') or game_file.filename.lower().endswith('.htm')):
+            return jsonify({'error': 'Only HTML files are allowed'}), 400
+        
+        # Validate file size (16MB limit)
+        if len(game_file.read()) > 16 * 1024 * 1024:
+            return jsonify({'error': 'File size must be less than 16MB'}), 400
+        
+        # Reset file pointer
+        game_file.seek(0)
+        
+        # Read file content
+        file_content = game_file.read()
+        
+        if not supabase_manager.is_connected():
+            return jsonify({'error': 'Storage service not available'}), 500
+        
+        # Save file to Supabase storage and create user_data record
+        result = supabase_manager.save_user_file(
+            user_id=str(session['user_id']),
+            file_content=file_content,
+            filename=game_file.filename,
+            content_type='text/html'
+        )
+        
+        if result:
+            logger.info(f"Game file uploaded successfully for user {session['user_id']}")
+            return jsonify({
+                'success': True, 
+                'message': 'Game uploaded successfully',
+                'file_id': result.get('id')
+            })
+        else:
+            return jsonify({'error': 'Failed to upload game file'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error uploading game file: {e}")
+        return jsonify({'error': 'Upload failed. Please try again.'}), 500
+
+@app.route('/my-games')
+def my_games():
+    """View user's uploaded games - requires authentication"""
+    if 'user_id' not in session:
+        flash('Please log in to view your games.', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        # Get user's uploaded games from Supabase
+        user_games = supabase_manager.get_user_data(str(session['user_id']))
+        
+        # Filter for HTML games
+        html_games = [game for game in user_games if game.get('data_type') == 'html_game']
+        
+        authenticated = 'user_id' in session
+        return render_template('my_games.html', games=html_games, authenticated=authenticated)
+        
+    except Exception as e:
+        logger.error(f"Error fetching user games: {e}")
+        flash('Error loading your games. Please try again.', 'error')
+        return redirect(url_for('index'))
+
 @app.route('/play/<int:game_id>')
 def play_game(game_id):
     """Play a specific game - mock for now"""
@@ -268,6 +351,30 @@ def play_game(game_id):
     
     authenticated = 'user_id' in session
     return render_template('play_game.html', game=game, game_id=game_id, authenticated=authenticated)
+
+@app.route('/play-uploaded/<game_id>')
+def play_uploaded_game(game_id):
+    """Play a user's uploaded HTML game"""
+    if 'user_id' not in session:
+        flash('Please log in to play games.', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        # Get the specific game data
+        user_games = supabase_manager.get_user_data(str(session['user_id']))
+        game = next((g for g in user_games if g.get('id') == game_id and g.get('data_type') == 'html_game'), None)
+        
+        if not game:
+            flash('Game not found.', 'error')
+            return redirect(url_for('my_games'))
+        
+        authenticated = 'user_id' in session
+        return render_template('play_uploaded_game.html', game=game, authenticated=authenticated)
+        
+    except Exception as e:
+        logger.error(f"Error loading uploaded game: {e}")
+        flash('Error loading game. Please try again.', 'error')
+        return redirect(url_for('my_games'))
 
 # Legacy routes for backward compatibility
 @app.route('/save_data', methods=['POST'])
