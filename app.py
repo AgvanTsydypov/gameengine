@@ -150,8 +150,18 @@ def register():
         confirm_password = request.form['confirm_password']
         
         # Validation
+        if not email or not password or not confirm_password:
+            error_msg = 'All fields are required!'
+            # Check if this is an AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                return jsonify({'success': False, 'error': error_msg}), 400
+            else:
+                flash(error_msg, 'error')
+                return render_template('register.html')
+        
         if password != confirm_password:
             error_msg = 'Passwords do not match!'
+            logger.warning(f"Password mismatch attempt for email: {email}")
             # Check if this is an AJAX request
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
                 return jsonify({'success': False, 'error': error_msg}), 400
