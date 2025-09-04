@@ -5,146 +5,696 @@
 {% block content %}
 <main>
   <section class="hero">
-    <div class="kicker"><span class="dot"></span>BUILD • ITERATE • PUBLISH</div>
-    <h1>CREATE NEW GAME</h1>
-    <p class="sub">Design your pixel-perfect game with AI assistance</p>
+    <div class="kicker"><span class="dot"></span>CREATE • PREVIEW • PUBLISH</div>
+    <h1>AI GAME GENERATOR</h1>
+    <p class="sub">Describe your game idea and watch AI bring it to life</p>
   </section>
 
   <section class="section">
-    <div style="max-width: 800px; margin: 0 auto;">
-      <div style="border: 2px solid var(--line); background: var(--card); padding: 24px;">
-        <h2 style="color: var(--cyber); margin-bottom: 20px; text-align: center;">UPLOAD GAME</h2>
+    <div class="game-creator-container">
+      <!-- Game Preview Panel -->
+      <div class="preview-panel">
+        <div class="preview-header">
+          <h2>GAME PREVIEW</h2>
+          <div class="preview-controls">
+            <button id="fullscreen-btn" class="btn btn-ghost" style="display: none;" onclick="toggleFullscreen()">
+              <span>⛶ FULLSCREEN</span>
+            </button>
+            <button id="publish-btn" class="btn btn-cta" style="display: none;" onclick="publishGame()">
+              <span>🚀 PUBLISH GAME</span>
+            </button>
+          </div>
+        </div>
         
-        <form id="upload-game-form" enctype="multipart/form-data">
-          <div class="form-group">
-            <label class="form-label" for="game-title">GAME TITLE</label>
-            <input class="form-input" type="text" id="game-title" name="title" required placeholder="Enter your game title">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="game-description">DESCRIPTION</label>
-            <textarea class="form-input" id="game-description" name="description" rows="3" required placeholder="Describe your game..."></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="game-file">HTML GAME FILE</label>
-            <div class="file-upload-container">
-              <input class="form-input" type="file" id="game-file" name="game_file" accept=".html,.htm" required>
-              <div class="file-upload-info">
-                <span style="color: var(--muted); font-size: 12px;">Upload your HTML game file (max 16MB)</span>
-              </div>
-            </div>
-          </div>
-
-          <button class="btn btn-cta form-submit" type="submit" style="margin-top: 16px;">
-            <span>📤 UPLOAD GAME</span>
-          </button>
-        </form>
-
-        <div id="upload-status" style="display: none; text-align: center; margin-top: 20px;">
-          <div class="loading-animation">
-            <span style="color: var(--cyber);">UPLOADING YOUR GAME</span>
-            <div style="margin-top: 10px;">
-              <span class="loading-dots">...</span>
+        <div class="preview-screen" id="preview-screen">
+          <div class="preview-placeholder">
+            <div class="placeholder-content">
+              <div class="placeholder-icon">🎮</div>
+              <h3>Your game will appear here</h3>
+              <p>Enter a game idea below and click "Generate" to create your game</p>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Upload success message -->
-      <div id="upload-success" style="display: none; margin-top: 40px; border: 2px solid var(--cyber); background: var(--card); padding: 24px; text-align: center;">
-        <h2 style="color: var(--cyber); margin-bottom: 16px;">✅ GAME UPLOADED SUCCESSFULLY!</h2>
-        <p style="color: var(--text); margin-bottom: 20px;">Your HTML game has been uploaded and saved to your account.</p>
-        <div style="display: flex; gap: 10px; justify-content: center;">
-          <button class="btn btn-cta" onclick="viewMyGames()"><span>VIEW MY GAMES</span></button>
-          <button class="btn btn-ghost" onclick="uploadAnother()"><span>UPLOAD ANOTHER</span></button>
+      <!-- Prompt Interface Panel -->
+      <div class="prompt-panel">
+        <div class="prompt-header">
+          <h3>GAME GENERATOR</h3>
+        </div>
+        
+        <div class="prompt-form">
+          <div class="form-group">
+            <label class="form-label" for="game-prompt">DESCRIBE YOUR GAME IDEA</label>
+            <textarea 
+              class="form-input prompt-textarea" 
+              id="game-prompt" 
+              name="prompt" 
+              rows="4" 
+              placeholder="e.g., Create a space shooter game where the player controls a spaceship and shoots asteroids. Add power-ups and increasing difficulty levels."
+            ></textarea>
+          </div>
+
+          <div class="form-actions">
+            <button id="generate-btn" class="btn btn-cta" onclick="generateGame()">
+              <span id="generate-text">✨ GENERATE GAME</span>
+              <span id="generate-loading" style="display: none;">🔄 GENERATING...</span>
+            </button>
+            <button id="refine-btn" class="btn btn-ghost" style="display: none;" onclick="refineGame()">
+              <span id="refine-text">🔧 REFINE GAME</span>
+              <span id="refine-loading" style="display: none;">🔄 REFINING...</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Game Info Panel (appears after generation) -->
+        <div id="game-info" class="game-info" style="display: none;">
+          <div class="game-title-section">
+            <label class="form-label" for="game-title-input">GAME TITLE</label>
+            <input class="form-input" type="text" id="game-title-input" placeholder="Enter game title...">
+          </div>
+          
+          <div class="game-stats">
+            <div class="stat-item">
+              <span class="stat-label">STATUS:</span>
+              <span class="stat-value" id="game-status">DRAFT</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">CREATED:</span>
+              <span class="stat-value" id="game-created">NOW</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 </main>
+
+<!-- Game Publishing Modal -->
+<div id="publish-modal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>PUBLISH GAME</h2>
+      <button class="modal-close" onclick="closePublishModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="publish-form">
+        <div class="form-group">
+          <label class="form-label" for="publish-title">GAME TITLE</label>
+          <input class="form-input" type="text" id="publish-title" name="title" required placeholder="Enter game title">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label" for="publish-description">DESCRIPTION</label>
+          <textarea class="form-input" id="publish-description" name="description" rows="3" required placeholder="Describe your game..."></textarea>
+        </div>
+        
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="closePublishModal()" style="display: inline-flex; visibility: visible; opacity: 1; color: #e6e6ea !important; font-size: 13px;">
+            <span style="color: #e6e6ea !important; position: relative; z-index: 100;">CANCEL</span>
+          </button>
+          <button type="submit" class="btn btn-cta" style="display: inline-flex; visibility: visible; opacity: 1; color: #e6e6ea !important; font-size: 13px;">
+            <span style="color: #e6e6ea !important; position: relative; z-index: 100;">🚀 PUBLISH TO COMMUNITY</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  const form = document.getElementById('upload-game-form');
-  const status = document.getElementById('upload-status');
-  const success = document.getElementById('upload-success');
+// Global variables
+let currentGameHtml = '';
+let currentGameTitle = '';
+let isGenerating = false;
 
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(form);
-    const fileInput = document.getElementById('game-file');
-    
-    // Validate file
-    if (!fileInput.files[0]) {
-      App.showAlert('Please select an HTML file to upload.', 'error');
-      return;
-    }
-    
-    const file = fileInput.files[0];
-    if (!file.name.toLowerCase().endsWith('.html') && !file.name.toLowerCase().endsWith('.htm')) {
-      App.showAlert('Please select a valid HTML file.', 'error');
-      return;
-    }
-    
-    if (file.size > 16 * 1024 * 1024) { // 16MB limit
-      App.showAlert('File size must be less than 16MB.', 'error');
-      return;
-    }
-    
-    // Show loading state
-    form.style.display = 'none';
-    status.style.display = 'block';
-    
-    // Upload file
-    fetch('/upload-game', {
-      method: 'POST',
-      body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-      status.style.display = 'none';
-      
-      if (data.success) {
-        success.style.display = 'block';
-        App.showAlert('Game uploaded successfully!', 'success');
-      } else {
-        form.style.display = 'block';
-        App.showAlert(data.error || 'Upload failed. Please try again.', 'error');
-      }
-    })
-    .catch(error => {
-      status.style.display = 'none';
-      form.style.display = 'block';
-      console.error('Upload error:', error);
-      App.showAlert('Upload failed. Please try again.', 'error');
-    });
+document.addEventListener('DOMContentLoaded', function() {
+  // Initialize the interface
+  const promptTextarea = document.getElementById('game-prompt');
+  const generateBtn = document.getElementById('generate-btn');
+  
+  // Auto-resize textarea
+  promptTextarea.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight) + 'px';
   });
+  
+  // Enable generate button when there's text
+  promptTextarea.addEventListener('input', function() {
+    generateBtn.disabled = this.value.trim().length === 0;
+  });
+  
+  // Initialize button state
+  generateBtn.disabled = true;
 });
 
-function viewMyGames() {
-  window.location.href = '/my-games';
+async function generateGame() {
+  if (isGenerating) return;
+  
+  const prompt = document.getElementById('game-prompt').value.trim();
+  if (!prompt) {
+    App.showAlert('Please enter a game idea first.', 'error');
+    return;
+  }
+  
+  isGenerating = true;
+  setGeneratingState(true);
+  
+  try {
+    const response = await fetch('/api/generate-game', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: prompt })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      currentGameHtml = data.html;
+      currentGameTitle = data.title;
+      
+      // Update preview
+      displayGamePreview(data.html);
+      
+      // Update UI state
+      showGameInfo(data.title);
+      showGameControls();
+      
+      App.showAlert('Game generated successfully!', 'success');
+    } else {
+      App.showAlert(data.error || 'Failed to generate game. Please try again.', 'error');
+    }
+  } catch (error) {
+    console.error('Generation error:', error);
+    App.showAlert('Failed to generate game. Please check your connection and try again.', 'error');
+  } finally {
+    isGenerating = false;
+    setGeneratingState(false);
+  }
 }
 
-function uploadAnother() {
-  document.getElementById('upload-game-form').style.display = 'block';
-  document.getElementById('upload-success').style.display = 'none';
-  document.getElementById('upload-game-form').reset();
+async function refineGame() {
+  if (isGenerating || !currentGameHtml) return;
+  
+  const prompt = document.getElementById('game-prompt').value.trim();
+  if (!prompt) {
+    App.showAlert('Please enter refinement instructions.', 'error');
+    return;
+  }
+  
+  isGenerating = true;
+  setRefiningState(true);
+  
+  try {
+    const response = await fetch('/api/refine-game', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        instruction: prompt,
+        current_html: currentGameHtml 
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      currentGameHtml = data.html;
+      
+      // Update preview
+      displayGamePreview(data.html);
+      
+      // Clear the prompt for next refinement
+      document.getElementById('game-prompt').value = '';
+      document.getElementById('game-prompt').style.height = 'auto';
+      
+      App.showAlert('Game refined successfully!', 'success');
+    } else {
+      App.showAlert(data.error || 'Failed to refine game. Please try again.', 'error');
+    }
+  } catch (error) {
+    console.error('Refinement error:', error);
+    App.showAlert('Failed to refine game. Please check your connection and try again.', 'error');
+  } finally {
+    isGenerating = false;
+    setRefiningState(false);
+  }
 }
+
+function displayGamePreview(html) {
+  const previewScreen = document.getElementById('preview-screen');
+  
+  // Create iframe for game preview
+  const iframe = document.createElement('iframe');
+  iframe.style.width = '100%';
+  iframe.style.height = '100%';
+  iframe.style.border = 'none';
+  iframe.style.borderRadius = '8px';
+  iframe.srcdoc = html;
+  
+  // Clear previous content and add iframe
+  previewScreen.innerHTML = '';
+  previewScreen.appendChild(iframe);
+}
+
+function showGameInfo(title) {
+  const gameInfo = document.getElementById('game-info');
+  const titleInput = document.getElementById('game-title-input');
+  const createdSpan = document.getElementById('game-created');
+  
+  titleInput.value = title;
+  createdSpan.textContent = new Date().toLocaleString();
+  gameInfo.style.display = 'block';
+}
+
+function showGameControls() {
+  document.getElementById('fullscreen-btn').style.display = 'inline-block';
+  document.getElementById('publish-btn').style.display = 'inline-block';
+  document.getElementById('refine-btn').style.display = 'inline-block';
+}
+
+function setGeneratingState(generating) {
+  const generateBtn = document.getElementById('generate-btn');
+  const generateText = document.getElementById('generate-text');
+  const generateLoading = document.getElementById('generate-loading');
+  const promptTextarea = document.getElementById('game-prompt');
+  
+  if (generating) {
+    generateText.style.display = 'none';
+    generateLoading.style.display = 'inline';
+    generateBtn.disabled = true;
+    promptTextarea.disabled = true;
+  } else {
+    generateText.style.display = 'inline';
+    generateLoading.style.display = 'none';
+    generateBtn.disabled = false;
+    promptTextarea.disabled = false;
+  }
+}
+
+function setRefiningState(refining) {
+  const refineBtn = document.getElementById('refine-btn');
+  const refineText = document.getElementById('refine-text');
+  const refineLoading = document.getElementById('refine-loading');
+  const promptTextarea = document.getElementById('game-prompt');
+  
+  if (refining) {
+    refineText.style.display = 'none';
+    refineLoading.style.display = 'inline';
+    refineBtn.disabled = true;
+    promptTextarea.disabled = true;
+  } else {
+    refineText.style.display = 'inline';
+    refineLoading.style.display = 'none';
+    refineBtn.disabled = false;
+    promptTextarea.disabled = false;
+  }
+}
+
+function toggleFullscreen() {
+  const previewScreen = document.getElementById('preview-screen');
+  const iframe = previewScreen.querySelector('iframe');
+  
+  if (!iframe) return;
+  
+  if (!document.fullscreenElement) {
+    iframe.requestFullscreen().catch(err => {
+      console.error('Failed to enter fullscreen:', err);
+    });
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+function publishGame() {
+  if (!currentGameHtml) {
+    App.showAlert('No game to publish. Please generate a game first.', 'error');
+    return;
+  }
+  
+  const title = document.getElementById('game-title-input').value.trim() || currentGameTitle;
+  document.getElementById('publish-title').value = title;
+  document.getElementById('publish-description').value = `AI-generated game: ${title}`;
+  
+  const modal = document.getElementById('publish-modal');
+  modal.style.display = 'flex';
+  modal.classList.add('show');
+}
+
+function closePublishModal() {
+  const modal = document.getElementById('publish-modal');
+  modal.style.display = 'none';
+  modal.classList.remove('show');
+}
+
+// Handle publish form submission
+document.getElementById('publish-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  if (!currentGameHtml) {
+    App.showAlert('No game to publish.', 'error');
+    return;
+  }
+  
+  const formData = new FormData(this);
+  const publishData = {
+    title: formData.get('title'),
+    description: formData.get('description'),
+    html_content: currentGameHtml
+  };
+  
+  try {
+    const response = await fetch('/api/publish-game', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(publishData)
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      App.showAlert('Game published successfully to the community!', 'success');
+      closePublishModal();
+      
+      // Optionally redirect to games page
+      setTimeout(() => {
+        window.location.href = '/games';
+      }, 2000);
+    } else {
+      App.showAlert(data.error || 'Failed to publish game.', 'error');
+    }
+  } catch (error) {
+    console.error('Publish error:', error);
+    App.showAlert('Failed to publish game. Please try again.', 'error');
+  }
+});
+
+// Close modal when clicking outside
+document.getElementById('publish-modal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closePublishModal();
+  }
+});
 </script>
 
 <style>
-.loading-dots {
-  animation: dots 1.5s infinite;
+.game-creator-container {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: 600px;
 }
 
-@keyframes dots {
-  0%, 20% { opacity: 0; }
-  50% { opacity: 1; }
-  100% { opacity: 0; }
+.preview-panel {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.preview-header {
+  background: var(--bg);
+  border-bottom: 2px solid var(--line);
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.preview-header h2 {
+  color: var(--cyber);
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.preview-controls {
+  display: flex;
+  gap: 12px;
+}
+
+.preview-screen {
+  height: 500px;
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+
+.preview-placeholder {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--bg) 0%, rgba(0, 255, 255, 0.05) 100%);
+}
+
+.placeholder-content {
+  text-align: center;
+  color: var(--muted);
+}
+
+.placeholder-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.placeholder-content h3 {
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.prompt-panel {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+  height: fit-content;
+}
+
+.prompt-header h3 {
+  color: var(--cyber);
+  margin: 0 0 20px 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.prompt-textarea {
+  min-height: 120px;
+  max-height: 200px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  line-height: 1.5;
+}
+
+.form-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.game-info {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.game-title-section {
+  margin-bottom: 16px;
+}
+
+.game-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.stat-label {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.stat-value {
+  color: var(--cyber);
+  font-weight: 700;
+}
+
+/* Modal Styles */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.show {
+  display: flex !important;
+}
+
+.modal-content {
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  background: var(--bg);
+  border-bottom: 2px solid var(--line);
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h2 {
+  color: var(--cyber);
+  margin: 0;
+  font-size: 18px;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  color: var(--text);
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  position: relative;
+  z-index: 10;
+}
+
+.modal-actions .btn {
+  position: relative;
+  z-index: 10;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  color: var(--fg) !important;
+}
+
+.modal-actions .btn * {
+  color: var(--fg) !important;
+  z-index: 11;
+  position: relative;
+}
+
+/* Additional button text visibility fixes */
+.modal .btn span,
+.modal .btn,
+.modal button {
+  color: #e6e6ea !important;
+  font-family: 'Press Start 2P', system-ui, monospace !important;
+  font-size: 11px !important;
+  text-shadow: none !important;
+  background-color: transparent !important;
+}
+
+/* Ensure pseudo-elements don't cover text */
+.modal .btn::after {
+  z-index: 1 !important;
+}
+
+.modal .btn span {
+  z-index: 100 !important;
+  position: relative !important;
+  color: #e6e6ea !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .game-creator-container {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .preview-screen {
+    height: 300px;
+  }
+  
+  .preview-header {
+    padding: 12px 16px;
+  }
+  
+  .preview-controls {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .prompt-panel {
+    padding: 16px;
+  }
+  
+  .form-actions {
+    gap: 8px;
+  }
+  
+  .modal-content {
+    width: 95%;
+  }
+  
+  .modal-body {
+    padding: 16px;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+  }
+}
+
+/* Loading animation */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+#generate-loading, #refine-loading {
+  animation: spin 1s linear infinite;
 }
 </style>
 {% endblock %}

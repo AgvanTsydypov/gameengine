@@ -2,9 +2,11 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from datetime import datetime
 import os
 import logging
+import json
 from config import config
 from supabase_client import supabase_manager
 from stripe_client import stripe_manager
+import openai
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -15,6 +17,130 @@ app = Flask(__name__)
 # Load configuration
 config_name = os.getenv('FLASK_ENV', 'development')
 app.config.from_object(config[config_name])
+
+# OpenAI configuration
+openai_api_key = app.config.get('OPENAI_API_KEY')
+if openai_api_key:
+    openai.api_key = openai_api_key
+    client = openai.OpenAI(api_key=openai_api_key)
+else:
+    logger.warning("⚠️  OpenAI API key not found. Game generation will not work.")
+    client = None
+
+def get_default_model():
+    """Get the default OpenAI model"""
+    return "gpt-5"
+
+# Game generation system instructions
+SYSTEM_INSTRUCTIONS_ONE_CALL = """
+You are a senior front-end engineer and compact game designer.
+From a free-form idea, produce:
+- a SINGLE-FILE HTML game (inline CSS + vanilla JS only).
+
+HARD CONSTRAINTS
+- One HTML file only (no external assets, no web requests, no CDNs, no fonts).
+- Mobile-first, accessible (focus-visible, high contrast, large tap target, respects prefers-reduced-motion).
+- Must run offline in a modern browser (Chrome/Safari/Firefox).
+- No console errors; concise JS; include a tiny inline help/about section.
+- If you use persistence, use localStorage safely and offer a Reset.
+
+RETURN ONLY strict JSON (no markdown) of shape:
+{
+  "title": str,
+  "html": "<!doctype html>... full self-contained document ..."
+}
+"""
+
+def build_user_message(user_prompt: str) -> str:
+    """Build user message for game generation"""
+    return (
+        "Create a complete, playable browser game from this idea. "
+        "Choose the most fitting genre/mechanics based on the prompt. "
+        "Keep it self-contained (inline CSS/JS) and accessible. "
+        "Return STRICT JSON as per schema.\n\n"
+        f"USER_IDEA:\n{user_prompt}"
+    )
+
+def generate_game_with_ai(user_prompt: str):
+    """Generate a game using OpenAI API"""
+    if not client:
+        logger.error("OpenAI client not initialized. Please check OPENAI_API_KEY.")
+        return None
+        
+    try:
+        logger.info(f"Generating game with prompt: {user_prompt[:100]}...")
+        
+        response = client.chat.completions.create(
+            model=get_default_model(),
+            messages=[
+                {"role": "system", "content": SYSTEM_INSTRUCTIONS_ONE_CALL},
+                {"role": "user", "content": build_user_message(user_prompt)},
+            ]
+        )
+        
+        content = response.choices[0].message.content.strip()
+        logger.info(f"OpenAI response received, length: {len(content)}")
+        
+        # Parse JSON response
+        try:
+            game_data = json.loads(content)
+            if "title" in game_data and "html" in game_data:
+                return game_data
+            else:
+                logger.error("Invalid game data structure from OpenAI")
+                return None
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON from OpenAI response: {e}")
+            logger.error(f"Response content: {content[:500]}...")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error generating game with AI: {e}")
+        return None
+
+def refine_game_with_ai(instruction: str, current_html: str):
+    """Refine existing game using OpenAI API"""
+    if not client:
+        logger.error("OpenAI client not initialized. Please check OPENAI_API_KEY.")
+        return None
+        
+    try:
+        logger.info(f"Refining game with instruction: {instruction[:100]}...")
+        
+        SYSTEM = (
+            "You are a senior front-end engineer. "
+            "You will receive an existing FULL, self-contained HTML game. "
+            "Apply the user's instructions and RETURN ONLY a full, valid HTML document "
+            "(<html>...</html>) with inline CSS + vanilla JS; no external resources; "
+            "no markdown, no JSON, no commentary."
+        )
+        USER = (
+            "USER_INSTRUCTIONS:\n"
+            f"{instruction}\n\n"
+            "CURRENT_GAME_HTML:\n"
+            f"{current_html}"
+        )
+
+        response = client.chat.completions.create(
+            model=get_default_model(),
+            messages=[
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": USER},
+            ]
+        )
+        
+        new_html = (response.choices[0].message.content or "").strip()
+        logger.info(f"Game refinement completed, HTML length: {len(new_html)}")
+        
+        if new_html and new_html.startswith("<!"):
+            return new_html
+        else:
+            logger.error("Invalid HTML returned from refinement")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error refining game with AI: {e}")
+        return None
 
 # User management functions via Supabase
 def create_user(email, password):
@@ -641,6 +767,118 @@ def toggle_like_game():
     except Exception as e:
         logger.error(f"Error toggling like for game: {e}")
         return jsonify({'error': 'Error updating like status'}), 500
+
+# AI Game Generation API Endpoints
+@app.route('/api/generate-game', methods=['POST'])
+def api_generate_game():
+    """Generate a new game using AI"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    try:
+        data = request.get_json()
+        prompt = data.get('prompt', '').strip()
+        
+        if not prompt:
+            return jsonify({'error': 'Game prompt is required'}), 400
+        
+        # Generate game with AI
+        game_data = generate_game_with_ai(prompt)
+        
+        if game_data:
+            return jsonify({
+                'success': True,
+                'title': game_data['title'],
+                'html': game_data['html']
+            })
+        else:
+            return jsonify({'error': 'Failed to generate game. Please try again.'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error in game generation API: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/refine-game', methods=['POST'])
+def api_refine_game():
+    """Refine an existing game using AI"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    try:
+        data = request.get_json()
+        instruction = data.get('instruction', '').strip()
+        current_html = data.get('current_html', '').strip()
+        
+        if not instruction:
+            return jsonify({'error': 'Refinement instruction is required'}), 400
+        
+        if not current_html:
+            return jsonify({'error': 'Current game HTML is required'}), 400
+        
+        # Refine game with AI
+        refined_html = refine_game_with_ai(instruction, current_html)
+        
+        if refined_html:
+            return jsonify({
+                'success': True,
+                'html': refined_html
+            })
+        else:
+            return jsonify({'error': 'Failed to refine game. Please try again.'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error in game refinement API: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/publish-game', methods=['POST'])
+def api_publish_game():
+    """Publish AI-generated game to community"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    try:
+        data = request.get_json()
+        title = data.get('title', '').strip()
+        description = data.get('description', '').strip()
+        html_content = data.get('html_content', '').strip()
+        
+        if not title:
+            return jsonify({'error': 'Game title is required'}), 400
+        
+        if not description:
+            return jsonify({'error': 'Game description is required'}), 400
+        
+        if not html_content:
+            return jsonify({'error': 'Game HTML content is required'}), 400
+        
+        if not supabase_manager.is_connected():
+            return jsonify({'error': 'Storage service not available'}), 500
+        
+        # Create a filename based on title
+        safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        filename = f"{safe_title.replace(' ', '_').lower()}.html"
+        
+        # Save game to Supabase storage and create user_data record
+        result = supabase_manager.save_user_file(
+            user_id=str(session['user_id']),
+            file_content=html_content.encode('utf-8'),
+            filename=filename,
+            content_type='text/html'
+        )
+        
+        if result:
+            logger.info(f"AI-generated game published successfully for user {session['user_id']}")
+            return jsonify({
+                'success': True,
+                'message': 'Game published successfully to the community',
+                'game_id': result.get('id')
+            })
+        else:
+            return jsonify({'error': 'Failed to publish game'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error publishing AI game: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     # Check Supabase connection
