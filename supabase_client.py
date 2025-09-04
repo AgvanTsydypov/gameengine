@@ -5,6 +5,10 @@ import os
 from supabase import create_client, Client
 from typing import Optional, Dict, Any, List
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -391,6 +395,311 @@ class SupabaseManager:
         except Exception as e:
             logger.error(f"Ошибка при загрузке файла в storage: {e}")
             return None
+
+    # ============ LIKES SYSTEM METHODS ============
+    
+    def like_game(self, game_id: str, user_id: str) -> bool:
+        """
+        Likes a game for a user
+        
+        Args:
+            game_id: ID of the game to like
+            user_id: ID of the user liking the game
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_connected():
+            return False
+        
+        try:
+            # Use service role key to bypass RLS for likes operations
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                # Insert like record
+                response = service_client.table('game_likes').insert({
+                    'game_id': game_id,
+                    'user_id': user_id
+                }).execute()
+                
+                if response.data:
+                    logger.info(f"User {user_id} liked game {game_id}")
+                    return True
+                    
+            return False
+            
+        except Exception as e:
+            # Handle duplicate like (user already liked this game)
+            if 'unique constraint' in str(e).lower() or 'duplicate key' in str(e).lower():
+                logger.info(f"User {user_id} already liked game {game_id}")
+                return True  # Consider it successful since the desired state is achieved
+            
+            logger.error(f"Error liking game {game_id} for user {user_id}: {e}")
+            return False
+    
+    def unlike_game(self, game_id: str, user_id: str) -> bool:
+        """
+        Unlikes a game for a user
+        
+        Args:
+            game_id: ID of the game to unlike
+            user_id: ID of the user unliking the game
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_connected():
+            return False
+        
+        try:
+            # Use service role key to bypass RLS for likes operations
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                # Delete like record
+                response = service_client.table('game_likes').delete().eq('game_id', game_id).eq('user_id', user_id).execute()
+                
+                logger.info(f"User {user_id} unliked game {game_id}")
+                return True
+                    
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error unliking game {game_id} for user {user_id}: {e}")
+            return False
+    
+    def get_user_liked_games(self, user_id: str) -> List[str]:
+        """
+        Gets list of game IDs that a user has liked
+        
+        Args:
+            user_id: ID of the user
+            
+        Returns:
+            List of game IDs that the user has liked
+        """
+        if not self.is_connected():
+            return []
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                response = service_client.table('game_likes').select('game_id').eq('user_id', user_id).execute()
+                
+                if response.data:
+                    return [like['game_id'] for like in response.data]
+                    
+            return []
+            
+        except Exception as e:
+            logger.warning(f"Likes table not available, returning empty likes list: {e}")
+            return []  # Return empty list if likes table doesn't exist
+    
+    def is_game_liked_by_user(self, game_id: str, user_id: str) -> bool:
+        """
+        Checks if a specific game is liked by a user
+        
+        Args:
+            game_id: ID of the game
+            user_id: ID of the user
+            
+        Returns:
+            True if user has liked the game, False otherwise
+        """
+        if not self.is_connected():
+            return False
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                response = service_client.table('game_likes').select('id').eq('game_id', game_id).eq('user_id', user_id).execute()
+                
+                return len(response.data or []) > 0
+                    
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking if game {game_id} is liked by user {user_id}: {e}")
+            return False
+    
+    def get_games_with_stats(self, limit: int = None, order_by: str = 'created_at') -> List[Dict[str, Any]]:
+        """
+        Gets all uploaded HTML games with their statistics (likes, plays)
+        Falls back to basic game data if statistics tables don't exist
+        
+        Args:
+            limit: Maximum number of games to return
+            order_by: Field to order by ('created_at', 'likes_count', 'plays_count')
+            
+        Returns:
+            List of dictionaries with game data and statistics
+        """
+        if not self.is_connected():
+            return []
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                try:
+                    # Try to query games with statistics join
+                    query = service_client.table('user_data').select(
+                        '*, game_statistics(likes_count, plays_count, updated_at)'
+                    ).eq('data_type', 'html_game')
+                    
+                    # Apply ordering - Supabase doesn't support ordering by joined table fields directly
+                    # We'll do client-side sorting after getting the data
+                    query = query.order('created_at', desc=True)
+                    
+                    # Apply limit if specified
+                    if limit:
+                        query = query.limit(limit)
+                    
+                    response = query.execute()
+                    
+                    if response.data:
+                        # Process the data to flatten statistics
+                        games = []
+                        for game in response.data:
+                            stats = game.get('game_statistics')
+                            if stats and isinstance(stats, dict):
+                                # Single statistics record as dictionary
+                                game['likes_count'] = stats.get('likes_count', 0)
+                                game['plays_count'] = stats.get('plays_count', 0)
+                            elif stats and isinstance(stats, list) and len(stats) > 0:
+                                # Multiple statistics records as list (take first)
+                                stat = stats[0]
+                                game['likes_count'] = stat.get('likes_count', 0)
+                                game['plays_count'] = stat.get('plays_count', 0)
+                            else:
+                                # No statistics record yet, initialize with defaults
+                                game['likes_count'] = 0
+                                game['plays_count'] = 0
+                            
+                            # Remove the nested statistics object
+                            if 'game_statistics' in game:
+                                del game['game_statistics']
+                            
+                            games.append(game)
+                        
+                        # Apply client-side sorting based on order_by parameter
+                        if order_by == 'likes_count':
+                            games.sort(key=lambda x: x.get('likes_count', 0), reverse=True)
+                        elif order_by == 'plays_count':
+                            games.sort(key=lambda x: x.get('plays_count', 0), reverse=True)
+                        # created_at is already sorted by the query
+                        
+                        return games
+                        
+                except Exception as stats_error:
+                    logger.warning(f"Statistics table not available, falling back to basic games: {stats_error}")
+                    # Fall back to basic game query without statistics
+                    return self._get_games_fallback(service_client, limit, order_by)
+                    
+            return []
+            
+        except Exception as e:
+            logger.error(f"Error getting games with statistics: {e}")
+            # Try fallback with regular client if service role fails
+            try:
+                return self._get_games_fallback(self.client, limit, order_by)
+            except Exception as fallback_error:
+                logger.error(f"Fallback also failed: {fallback_error}")
+                return []
+    
+    def _get_games_fallback(self, client, limit: int = None, order_by: str = 'created_at') -> List[Dict[str, Any]]:
+        """
+        Fallback method to get games without statistics when likes system tables don't exist
+        """
+        try:
+            # Query basic games data
+            query = client.table('user_data').select('*').eq('data_type', 'html_game')
+            
+            # Simple ordering (can only use fields that exist in user_data)
+            if order_by in ['likes_count', 'plays_count']:
+                # If asking for stats ordering but no stats table, order by created_at instead
+                query = query.order('created_at', desc=True)
+            else:
+                query = query.order('created_at', desc=True)
+            
+            # Apply limit if specified
+            if limit:
+                query = query.limit(limit)
+            
+            response = query.execute()
+            
+            if response.data:
+                # Add default statistics to games
+                games = []
+                for game in response.data:
+                    game['likes_count'] = 0  # Default values when no stats table
+                    game['plays_count'] = 0
+                    games.append(game)
+                
+                return games
+                
+            return []
+            
+        except Exception as e:
+            logger.error(f"Fallback method failed: {e}")
+            return []
+    
+    def increment_game_play_count(self, game_id: str) -> bool:
+        """
+        Increments the play count for a game
+        
+        Args:
+            game_id: ID of the game
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_connected():
+            return False
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                # Try to update existing record
+                existing = service_client.table('game_statistics').select('*').eq('game_id', game_id).execute()
+                
+                if existing.data and len(existing.data) > 0:
+                    # Update existing record
+                    new_count = existing.data[0]['plays_count'] + 1
+                    service_client.table('game_statistics').update({
+                        'plays_count': new_count,
+                        'updated_at': 'now()'
+                    }).eq('game_id', game_id).execute()
+                else:
+                    # Create new record
+                    service_client.table('game_statistics').insert({
+                        'game_id': game_id,
+                        'likes_count': 0,
+                        'plays_count': 1
+                    }).execute()
+                
+                logger.info(f"Incremented play count for game {game_id}")
+                return True
+                    
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error incrementing play count for game {game_id}: {e}")
+            return False
 
 # Глобальный экземпляр менеджера Supabase
 supabase_manager = SupabaseManager()

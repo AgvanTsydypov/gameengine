@@ -21,7 +21,7 @@
 
   {% if trending_games %}
   <section id="trending" class="section" aria-labelledby="trend-title">
-    <h2 id="trend-title">RECENT COMMUNITY GAMES</h2>
+    <h2 id="trend-title">TRENDING GAMES</h2>
     <div class="games-grid">
       {% for game in trending_games %}
       <div class="game-card">
@@ -35,11 +35,26 @@
         
         <div class="game-card-content">
           <p class="game-description">
-            {{ 'Community created game - ' + game.title }}
+            {{ game.description or 'Trending community game - ' + game.title }}
           </p>
           <div class="game-stats">
             <span class="game-rating">★ {{ game.rating }}</span>
             <span class="game-plays">{{ game.plays }} PLAYS</span>
+            <span class="game-likes">
+              {% if session.user_id %}
+                <button class="like-btn {{ 'liked' if game.is_liked else '' }}" 
+                        data-game-id="{{ game.id }}" 
+                        aria-label="{{ 'Unlike' if game.is_liked else 'Like' }} {{ game.title }}">
+                  <span class="like-icon">{{ '❤️' if game.is_liked else '🤍' }}</span>
+                  <span class="like-count">{{ game.likes_count }}</span>
+                </button>
+              {% else %}
+                <span class="like-display">
+                  <span class="like-icon">🤍</span>
+                  <span class="like-count">{{ game.likes_count }}</span>
+                </span>
+              {% endif %}
+            </span>
           </div>
         </div>
         
@@ -47,6 +62,12 @@
           <a href="{{ url_for('play_uploaded_game', game_id=game.id) }}" class="btn btn-primary">
             <span>🎮 PLAY GAME</span>
           </a>
+          {% if session.user_id %}
+            <button class="btn btn-ghost like-btn-action {{ 'liked' if game.is_liked else '' }}" 
+                    data-game-id="{{ game.id }}">
+              <span>{{ '💔 UNLIKE' if game.is_liked else '❤️ LIKE' }}</span>
+            </button>
+          {% endif %}
         </div>
       </div>
       {% endfor %}

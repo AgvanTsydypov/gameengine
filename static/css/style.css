@@ -424,6 +424,83 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
   text-align: center;
 }
 
+/* Like System Styles */
+.game-likes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.like-btn, .like-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.like-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.like-btn.liked {
+  color: var(--pink);
+}
+
+.like-btn.liked:hover {
+  color: #ff6ba3;
+}
+
+.like-display {
+  cursor: default;
+}
+
+.like-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.like-count {
+  font-weight: 600;
+  min-width: 20px;
+  text-align: left;
+}
+
+.like-btn-action {
+  min-width: 100px;
+}
+
+.like-btn-action.liked {
+  background: rgba(255, 77, 138, 0.1);
+  border-color: var(--pink);
+  color: var(--pink);
+}
+
+.like-btn-action.liked:hover {
+  background: rgba(255, 77, 138, 0.2);
+}
+
+/* Loading state for like buttons */
+.like-btn.loading,
+.like-btn-action.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.like-btn.loading::after,
+.like-btn-action.loading::after {
+  content: "...";
+  animation: dots 1s infinite;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .hero { padding: 0 12px; }

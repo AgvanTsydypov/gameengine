@@ -395,6 +395,89 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, 5000);
     });
+
+    // ============ LIKE SYSTEM FUNCTIONALITY ============
+    
+    // Like System Functionality
+    function handleLikeAction(gameId, button) {
+        // Prevent multiple clicks
+        if (button.classList.contains('loading')) return;
+        
+        button.classList.add('loading');
+        
+        fetch('/toggle_like_game', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ game_id: gameId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update all like buttons and displays for this game
+                updateLikeUI(gameId, data.is_liked);
+                showAlert(data.message, 'success');
+            } else {
+                showAlert(data.error || 'Failed to update like status', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Like error:', error);
+            showAlert('Error updating like status', 'error');
+        })
+        .finally(() => {
+            button.classList.remove('loading');
+        });
+    }
+
+    function updateLikeUI(gameId, isLiked) {
+        // Find all elements related to this game
+        const likeBtns = document.querySelectorAll(`[data-game-id="${gameId}"]`);
+        
+        likeBtns.forEach(element => {
+            const likeIcon = element.querySelector('.like-icon');
+            const likeCount = element.querySelector('.like-count');
+            const buttonText = element.querySelector('span');
+            
+            // Update like status
+            if (isLiked) {
+                element.classList.add('liked');
+                if (likeIcon) likeIcon.textContent = '❤️';
+                if (buttonText && element.classList.contains('like-btn-action')) {
+                    buttonText.textContent = '💔 UNLIKE';
+                }
+            } else {
+                element.classList.remove('liked');
+                if (likeIcon) likeIcon.textContent = '🤍';
+                if (buttonText && element.classList.contains('like-btn-action')) {
+                    buttonText.textContent = '❤️ LIKE';
+                }
+            }
+            
+            // Update like count (approximate - we don't get the exact count back)
+            if (likeCount) {
+                const currentCount = parseInt(likeCount.textContent) || 0;
+                const newCount = isLiked ? currentCount + 1 : Math.max(0, currentCount - 1);
+                likeCount.textContent = newCount;
+            }
+        });
+    }
+
+    // Add click listeners to like buttons
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.like-btn') || e.target.closest('.like-btn-action')) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const button = e.target.closest('.like-btn') || e.target.closest('.like-btn-action');
+            const gameId = button.getAttribute('data-game-id');
+            
+            if (gameId) {
+                handleLikeAction(gameId, button);
+            }
+        }
+    });
 });
 
 // Global utilities

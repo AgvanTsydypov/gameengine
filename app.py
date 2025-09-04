@@ -101,26 +101,41 @@ def authenticate_user(email, password):
 def index():
     authenticated = 'user_id' in session
     
-    # Get a few recent games for the trending section
+    # Get trending games (most liked) for the homepage
     trending_games = []
+    user_liked_games = []
+    
     try:
         if supabase_manager.is_connected():
-            uploaded_games_raw = supabase_manager.get_all_uploaded_games()
+            # Get top 3 trending games ordered by likes
+            uploaded_games_raw = supabase_manager.get_games_with_stats(limit=3, order_by='likes_count')
             
-            # Get up to 3 most recent games for trending section
-            for game in uploaded_games_raw[:3]:
+            # Get user's liked games if authenticated
+            if 'user_id' in session:
+                user_liked_games = supabase_manager.get_user_liked_games(str(session['user_id']))
+            
+            # Transform games for homepage
+            for game in uploaded_games_raw:
                 # Extract title from filename (remove .html extension)
                 title = game.get('filename', 'Untitled Game')
                 if title.endswith('.html'):
                     title = title[:-5]
                 title = title.replace('-', ' ').replace('_', ' ').upper()
                 
+                # Calculate rating based on likes
+                likes_count = game.get('likes_count', 0)
+                plays_count = game.get('plays_count', 0)
+                rating = min(5.0, 3.0 + (likes_count * 0.5))
+                
                 trending_games.append({
                     'id': game.get('id'),
                     'title': title,
-                    'rating': 4.5,  # Default rating for uploaded games
-                    'category': 'USER GAME',
-                    'plays': 'NEW'
+                    'rating': round(rating, 1),
+                    'category': 'TRENDING',
+                    'plays': f"{plays_count}",
+                    'likes_count': likes_count,
+                    'is_liked': game.get('id') in user_liked_games,
+                    'description': f'Trending community game: {title}'
                 })
     except Exception as e:
         logger.error(f"Error fetching trending games: {e}")
@@ -211,12 +226,18 @@ def logout():
 
 @app.route('/games')
 def games():
-    """Games page - displays all uploaded games from the database"""
-    # Get uploaded games from all users
+    """Games page - displays all uploaded games from the database with likes and stats"""
     uploaded_games = []
+    user_liked_games = []
+    
     try:
         if supabase_manager.is_connected():
-            uploaded_games_raw = supabase_manager.get_all_uploaded_games()
+            # Get games with statistics (likes, plays) ordered by likes count (trending)
+            uploaded_games_raw = supabase_manager.get_games_with_stats(order_by='likes_count')
+            
+            # Get user's liked games if authenticated
+            if 'user_id' in session:
+                user_liked_games = supabase_manager.get_user_liked_games(str(session['user_id']))
             
             # Transform uploaded games to match template format
             for game in uploaded_games_raw:
@@ -226,13 +247,20 @@ def games():
                     title = title[:-5]
                 title = title.replace('-', ' ').replace('_', ' ').upper()
                 
+                # Calculate rating based on likes (simple algorithm)
+                likes_count = game.get('likes_count', 0)
+                plays_count = game.get('plays_count', 0)
+                rating = min(5.0, 3.0 + (likes_count * 0.5))  # Base 3.0, up to 5.0 based on likes
+                
                 uploaded_games.append({
                     'id': game.get('id'),
                     'title': title,
-                    'category': 'USER GAME',
-                    'plays': 'NEW',
-                    'rating': 4.5,  # Default rating for uploaded games
-                    'description': f'User-created game: {title}',
+                    'category': 'COMMUNITY',
+                    'plays': f"{plays_count}",
+                    'rating': round(rating, 1),
+                    'likes_count': likes_count,
+                    'is_liked': game.get('id') in user_liked_games,
+                    'description': f'Community game: {title}',
                     'type': 'uploaded',
                     'filename': game.get('filename'),
                     'data_content': game.get('data_content'),
@@ -348,6 +376,9 @@ def play_uploaded_game(game_id):
         if not game:
             flash('Game not found.', 'error')
             return redirect(url_for('games'))
+        
+        # Increment play count
+        supabase_manager.increment_game_play_count(str(game_id))
         
         authenticated = 'user_id' in session
         return render_template('play_uploaded_game.html', game=game, authenticated=authenticated)
@@ -504,6 +535,102 @@ def create_payment_intent():
     except Exception as e:
         logger.error(f"Error creating payment intent: {e}")
         return jsonify({'error': 'Error creating payment'}), 500
+
+# ============ LIKES SYSTEM ROUTES ============
+
+@app.route('/like_game', methods=['POST'])
+def like_game():
+    """Like a game - requires authentication"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    try:
+        data = request.get_json()
+        game_id = data.get('game_id')
+        
+        if not game_id:
+            return jsonify({'error': 'Game ID is required'}), 400
+        
+        # Verify game exists
+        game = supabase_manager.get_game_by_id(str(game_id))
+        if not game:
+            return jsonify({'error': 'Game not found'}), 404
+        
+        # Like the game
+        success = supabase_manager.like_game(str(game_id), str(session['user_id']))
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Game liked successfully'})
+        else:
+            return jsonify({'error': 'Failed to like game'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error liking game: {e}")
+        return jsonify({'error': 'Error liking game'}), 500
+
+@app.route('/unlike_game', methods=['POST'])
+def unlike_game():
+    """Unlike a game - requires authentication"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    try:
+        data = request.get_json()
+        game_id = data.get('game_id')
+        
+        if not game_id:
+            return jsonify({'error': 'Game ID is required'}), 400
+        
+        # Unlike the game
+        success = supabase_manager.unlike_game(str(game_id), str(session['user_id']))
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Game unliked successfully'})
+        else:
+            return jsonify({'error': 'Failed to unlike game'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error unliking game: {e}")
+        return jsonify({'error': 'Error unliking game'}), 500
+
+@app.route('/toggle_like_game', methods=['POST'])
+def toggle_like_game():
+    """Toggle like status for a game - requires authentication"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    try:
+        data = request.get_json()
+        game_id = data.get('game_id')
+        
+        if not game_id:
+            return jsonify({'error': 'Game ID is required'}), 400
+        
+        # Check current like status
+        is_liked = supabase_manager.is_game_liked_by_user(str(game_id), str(session['user_id']))
+        
+        if is_liked:
+            # Unlike the game
+            success = supabase_manager.unlike_game(str(game_id), str(session['user_id']))
+            action = 'unliked'
+        else:
+            # Like the game
+            success = supabase_manager.like_game(str(game_id), str(session['user_id']))
+            action = 'liked'
+        
+        if success:
+            return jsonify({
+                'success': True, 
+                'action': action,
+                'is_liked': not is_liked,
+                'message': f'Game {action} successfully'
+            })
+        else:
+            return jsonify({'error': f'Failed to {action.replace("ed", "")} game'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error toggling like for game: {e}")
+        return jsonify({'error': 'Error updating like status'}), 500
 
 if __name__ == '__main__':
     # Check Supabase connection
