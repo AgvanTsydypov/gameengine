@@ -118,6 +118,59 @@ class SupabaseManager:
             logger.error(f"Ошибка при получении данных пользователя: {e}")
             return []
     
+    def get_all_uploaded_games(self) -> List[Dict[str, Any]]:
+        """
+        Gets all uploaded HTML games from all users
+        
+        Returns:
+            List of dictionaries with game data for all users
+        """
+        if not self.is_connected():
+            return []
+        
+        try:
+            # Use service role key for server-side operations to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('user_data').select('*').eq('data_type', 'html_game').order('created_at', desc=True).execute()
+            else:
+                response = self.client.table('user_data').select('*').eq('data_type', 'html_game').order('created_at', desc=True).execute()
+            
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Error getting all uploaded games: {e}")
+            return []
+    
+    def get_game_by_id(self, game_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Gets a specific game by its ID from any user
+        
+        Args:
+            game_id: ID of the game
+            
+        Returns:
+            Dictionary with game data or None if not found
+        """
+        if not self.is_connected():
+            return None
+        
+        try:
+            # Use service role key for server-side operations to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('user_data').select('*').eq('id', game_id).eq('data_type', 'html_game').execute()
+            else:
+                response = self.client.table('user_data').select('*').eq('id', game_id).eq('data_type', 'html_game').execute()
+            
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+        except Exception as e:
+            logger.error(f"Error getting game by ID {game_id}: {e}")
+            return None
+    
     def delete_user_data(self, data_id: str, user_id: str) -> bool:
         """
         Удаляет данные пользователя

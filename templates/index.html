@@ -11,40 +11,34 @@
     <div class="hero-cta">
       {% if session.user_id %}
         <a class="btn btn-cta" href="{{ url_for('create_game') }}"><span>+ CREATE NEW GAME</span></a>
-        <a class="btn btn-ghost" href="{{ url_for('games') }}"><span>EXPLORE TRENDING</span></a>
+        <a class="btn btn-ghost" href="{{ url_for('games') }}"><span>EXPLORE COMMUNITY</span></a>
       {% else %}
         <a class="btn btn-cta auth-required" href="#" id="create-game-btn"><span>+ CREATE NEW GAME</span></a>
-        <a class="btn btn-ghost" href="{{ url_for('games') }}"><span>EXPLORE TRENDING</span></a>
+        <a class="btn btn-ghost" href="{{ url_for('games') }}"><span>EXPLORE COMMUNITY</span></a>
       {% endif %}
     </div>
   </section>
 
+  {% if trending_games %}
   <section id="trending" class="section" aria-labelledby="trend-title">
-    <h2 id="trend-title">TRENDING GAMES</h2>
+    <h2 id="trend-title">RECENT COMMUNITY GAMES</h2>
     <div class="grid">
-      <a href="{{ url_for('play_game', game_id=1) }}" class="card" aria-label="Play game: Pixel Odyssey">
+      {% for game in trending_games %}
+      <a href="{{ url_for('play_uploaded_game', game_id=game.id) }}" class="card" aria-label="Play game: {{ game.title }}">
         <div class="thumb">
-          <span class="badge px-border">★ 4.8</span>
+          <span class="badge px-border">★ {{ game.rating }}</span>
+          <span class="badge px-border" style="background: var(--cyber); color: var(--bg);">USER</span>
         </div>
-        <div class="title">PIXEL ODYSSEY</div>
-        <div class="meta">ARCADE • 3.4K PLAYS</div>
+        <div class="title">{{ game.title }}</div>
+        <div class="meta">{{ game.category }} • {{ game.plays }} PLAYS</div>
       </a>
-      <a href="{{ url_for('play_game', game_id=2) }}" class="card" aria-label="Play game: Cosmic Invaders">
-        <div class="thumb">
-          <span class="badge px-border">★ 4.7</span>
-        </div>
-        <div class="title">COSMIC INVADERS</div>
-        <div class="meta">SHOOTER • 5.1K PLAYS</div>
-      </a>
-      <a href="{{ url_for('play_game', game_id=3) }}" class="card" aria-label="Play game: Neon Quest">
-        <div class="thumb">
-          <span class="badge px-border">★ 4.6</span>
-        </div>
-        <div class="title">NEON QUEST</div>
-        <div class="meta">ADVENTURE • 2.0K PLAYS</div>
-      </a>
+      {% endfor %}
+    </div>
+    <div style="text-align: center; margin-top: 30px;">
+      <a class="btn btn-ghost" href="{{ url_for('games') }}"><span>VIEW ALL GAMES</span></a>
     </div>
   </section>
+  {% endif %}
 </main>
 
 <!-- Login Modal -->

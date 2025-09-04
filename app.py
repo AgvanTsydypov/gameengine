@@ -89,7 +89,32 @@ def authenticate_user(email, password):
 @app.route('/')
 def index():
     authenticated = 'user_id' in session
-    return render_template('index.html', authenticated=authenticated)
+    
+    # Get a few recent games for the trending section
+    trending_games = []
+    try:
+        if supabase_manager.is_connected():
+            uploaded_games_raw = supabase_manager.get_all_uploaded_games()
+            
+            # Get up to 3 most recent games for trending section
+            for game in uploaded_games_raw[:3]:
+                # Extract title from filename (remove .html extension)
+                title = game.get('filename', 'Untitled Game')
+                if title.endswith('.html'):
+                    title = title[:-5]
+                title = title.replace('-', ' ').replace('_', ' ').upper()
+                
+                trending_games.append({
+                    'id': game.get('id'),
+                    'title': title,
+                    'rating': 4.5,  # Default rating for uploaded games
+                    'category': 'USER GAME',
+                    'plays': 'NEW'
+                })
+    except Exception as e:
+        logger.error(f"Error fetching trending games: {e}")
+    
+    return render_template('index.html', authenticated=authenticated, trending_games=trending_games)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -182,61 +207,38 @@ def logout():
 
 @app.route('/games')
 def games():
-    """Trending games page - accessible without login"""
-    # Mock games data
-    mock_games = [
-        {
-            'id': 1,
-            'title': 'PIXEL ODYSSEY',
-            'category': 'ARCADE',
-            'plays': '3.4K',
-            'rating': 4.8,
-            'description': 'An epic pixel adventure through space and time'
-        },
-        {
-            'id': 2,
-            'title': 'COSMIC INVADERS',
-            'category': 'SHOOTER',
-            'plays': '5.1K',
-            'rating': 4.7,
-            'description': 'Defend Earth from alien invaders in this retro shooter'
-        },
-        {
-            'id': 3,
-            'title': 'NEON QUEST',
-            'category': 'ADVENTURE',
-            'plays': '2.0K',
-            'rating': 4.6,
-            'description': 'Navigate through neon-lit cyberpunk worlds'
-        },
-        {
-            'id': 4,
-            'title': 'RETRO RACER',
-            'category': 'RACING',
-            'plays': '4.2K',
-            'rating': 4.5,
-            'description': 'High-speed pixel racing action'
-        },
-        {
-            'id': 5,
-            'title': 'STARSHIP COMMANDER',
-            'category': 'STRATEGY',
-            'plays': '1.8K',
-            'rating': 4.9,
-            'description': 'Command your fleet in epic space battles'
-        },
-        {
-            'id': 6,
-            'title': 'PIXEL PLATFORMER',
-            'category': 'PLATFORM',
-            'plays': '3.7K',
-            'rating': 4.4,
-            'description': 'Classic platforming with modern pixel art'
-        }
-    ]
+    """Games page - displays all uploaded games from the database"""
+    # Get uploaded games from all users
+    uploaded_games = []
+    try:
+        if supabase_manager.is_connected():
+            uploaded_games_raw = supabase_manager.get_all_uploaded_games()
+            
+            # Transform uploaded games to match template format
+            for game in uploaded_games_raw:
+                # Extract title from filename (remove .html extension)
+                title = game.get('filename', 'Untitled Game')
+                if title.endswith('.html'):
+                    title = title[:-5]
+                title = title.replace('-', ' ').replace('_', ' ').upper()
+                
+                uploaded_games.append({
+                    'id': game.get('id'),
+                    'title': title,
+                    'category': 'USER GAME',
+                    'plays': 'NEW',
+                    'rating': 4.5,  # Default rating for uploaded games
+                    'description': f'User-created game: {title}',
+                    'type': 'uploaded',
+                    'filename': game.get('filename'),
+                    'data_content': game.get('data_content'),
+                    'created_at': game.get('created_at')
+                })
+    except Exception as e:
+        logger.error(f"Error fetching uploaded games: {e}")
     
     authenticated = 'user_id' in session
-    return render_template('games.html', games=mock_games, authenticated=authenticated)
+    return render_template('games.html', games=uploaded_games, authenticated=authenticated)
 
 @app.route('/create-game')
 def create_game():
@@ -331,42 +333,17 @@ def my_games():
         flash('Error loading your games. Please try again.', 'error')
         return redirect(url_for('index'))
 
-@app.route('/play/<int:game_id>')
-def play_game(game_id):
-    """Play a specific game - mock for now"""
-    # Mock game data
-    mock_games = {
-        1: {'title': 'PIXEL ODYSSEY', 'category': 'ARCADE'},
-        2: {'title': 'COSMIC INVADERS', 'category': 'SHOOTER'},
-        3: {'title': 'NEON QUEST', 'category': 'ADVENTURE'},
-        4: {'title': 'RETRO RACER', 'category': 'RACING'},
-        5: {'title': 'STARSHIP COMMANDER', 'category': 'STRATEGY'},
-        6: {'title': 'PIXEL PLATFORMER', 'category': 'PLATFORM'}
-    }
-    
-    game = mock_games.get(game_id)
-    if not game:
-        flash('Game not found.', 'error')
-        return redirect(url_for('games'))
-    
-    authenticated = 'user_id' in session
-    return render_template('play_game.html', game=game, game_id=game_id, authenticated=authenticated)
 
 @app.route('/play-uploaded/<game_id>')
 def play_uploaded_game(game_id):
-    """Play a user's uploaded HTML game"""
-    if 'user_id' not in session:
-        flash('Please log in to play games.', 'error')
-        return redirect(url_for('index'))
-    
+    """Play any user's uploaded HTML game - accessible to all users"""
     try:
-        # Get the specific game data
-        user_games = supabase_manager.get_user_data(str(session['user_id']))
-        game = next((g for g in user_games if g.get('id') == game_id and g.get('data_type') == 'html_game'), None)
+        # Get the specific game data by ID (from any user)
+        game = supabase_manager.get_game_by_id(str(game_id))
         
         if not game:
             flash('Game not found.', 'error')
-            return redirect(url_for('my_games'))
+            return redirect(url_for('games'))
         
         authenticated = 'user_id' in session
         return render_template('play_uploaded_game.html', game=game, authenticated=authenticated)
@@ -374,18 +351,14 @@ def play_uploaded_game(game_id):
     except Exception as e:
         logger.error(f"Error loading uploaded game: {e}")
         flash('Error loading game. Please try again.', 'error')
-        return redirect(url_for('my_games'))
+        return redirect(url_for('games'))
 
 @app.route('/game-content/<game_id>')
 def get_game_content(game_id):
-    """Serve the HTML content of a game directly"""
-    if 'user_id' not in session:
-        return "Authentication required", 401
-    
+    """Serve the HTML content of any game directly - accessible to all users"""
     try:
-        # Get the specific game data
-        user_games = supabase_manager.get_user_data(str(session['user_id']))
-        game = next((g for g in user_games if g.get('id') == game_id and g.get('data_type') == 'html_game'), None)
+        # Get the specific game data by ID (from any user)
+        game = supabase_manager.get_game_by_id(str(game_id))
         
         if not game:
             return "Game not found", 404

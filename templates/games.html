@@ -6,22 +6,39 @@
 <main>
   <section class="hero">
     <div class="kicker"><span class="dot"></span>DISCOVER • PLAY • ENJOY</div>
-    <h1>TRENDING GAMES</h1>
-    <p class="sub">Explore the most popular pixel-perfect games created by our community</p>
+    <h1>COMMUNITY GAMES</h1>
+    <p class="sub">Explore amazing games created and shared by our community members</p>
   </section>
 
   <section class="section">
+    {% if games %}
     <div class="grid">
       {% for game in games %}
-      <a href="{{ url_for('play_game', game_id=game.id) }}" class="card" aria-label="Play game: {{ game.title }}">
+      <a href="{{ url_for('play_uploaded_game', game_id=game.id) }}" class="card" aria-label="Play game: {{ game.title }}">
         <div class="thumb">
           <span class="badge px-border">★ {{ game.rating }}</span>
+          <span class="badge px-border" style="background: var(--cyber); color: var(--bg);">USER</span>
         </div>
         <div class="title">{{ game.title }}</div>
         <div class="meta">{{ game.category }} • {{ game.plays }} PLAYS</div>
       </a>
       {% endfor %}
     </div>
+    {% else %}
+    <div style="text-align: center; padding: 60px 20px; color: var(--muted);">
+      <h3 style="color: var(--text); margin-bottom: 16px;">NO GAMES YET</h3>
+      <p>Be the first to create and share a game with the community!</p>
+      {% if session.user_id %}
+      <div style="margin-top: 20px;">
+        <a class="btn btn-cta" href="{{ url_for('create_game') }}"><span>+ CREATE YOUR FIRST GAME</span></a>
+      </div>
+      {% else %}
+      <div style="margin-top: 20px;">
+        <a class="btn btn-cta" href="#" id="no-games-join-btn"><span>+ JOIN AND CREATE A GAME</span></a>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
   </section>
 
   {% if not session.user_id %}
@@ -162,6 +179,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Handle auth required buttons
   document.getElementById('join-create-btn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openModal('login');
+  });
+  
+  document.getElementById('no-games-join-btn')?.addEventListener('click', (e) => {
     e.preventDefault();
     openModal('login');
   });
