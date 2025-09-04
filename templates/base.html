@@ -23,6 +23,7 @@
       <div class="actions">
         {% if session.user_id %}
           <a class="btn btn-ghost" href="{{ url_for('games') }}"><span>GAMES</span></a>
+          <a class="btn btn-ghost" href="{{ url_for('my_games') }}"><span>MY GAMES</span></a>
           <a class="btn btn-ghost" href="{{ url_for('logout') }}"><span>LOGOUT</span></a>
         {% else %}
           <a class="btn btn-ghost" href="#" id="login-btn"><span>LOGIN</span></a>
