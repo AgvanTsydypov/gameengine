@@ -70,10 +70,22 @@ header{ position:sticky; top:0; z-index:10; border-bottom:2px solid var(--line);
   z-index:-1;
 }
 .btn::after{ content:""; position:absolute; inset:0; background: linear-gradient(180deg, #0f1222, #0b0e18); }
-.btn span{ position:relative; z-index:1; }
+.btn span{ position:relative; z-index:1; font-family: 'Press Start 2P', system-ui, monospace; }
 .btn:hover{ transform: translateY(-2px); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn:disabled:hover { transform: none; }
+
+/* Ensure all buttons use pixeled font */
+.btn, .btn span {
+  font-family: 'Press Start 2P', system-ui, monospace !important;
+  font-size: 11px !important;
+}
+
+/* Specific rules for form submit buttons */
+.form-submit, .form-submit span {
+  font-family: 'Press Start 2P', system-ui, monospace !important;
+  font-size: 11px !important;
+}
 
 .btn-ghost{ background: #0d1020; }
 .btn-ghost::before{ background: var(--line); }

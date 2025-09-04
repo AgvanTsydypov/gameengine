@@ -31,6 +31,45 @@ def get_default_model():
     """Get the default OpenAI model"""
     return "gpt-5"
 
+def fix_text_encoding(text):
+    """Fix common text encoding issues in HTML content"""
+    if not text:
+        return text
+    
+    original_text = text
+    
+    # Fix common UTF-8 encoding issues that occur in OpenAI generated content
+    fixes = {
+        'â': '-',           # Fix hyphen encoding (most common issue)
+        'Â': ' ',           # Fix space encoding
+        'â€™': "'",         # Fix apostrophe
+        'â€œ': '"',         # Fix opening quote
+        'â€': '"',          # Fix closing quote
+        'â€¦': '...',       # Fix ellipsis
+        'â€"': '--',        # Fix em dash
+        '\u201d': '-',      # Fix en dash using unicode  
+        '\u2019': "'",      # Fix apostrophe using unicode
+        'Ã¢â‚¬â€œ': '-',    # Another common hyphen encoding
+        'Ã¢â‚¬â„¢': "'",    # Another apostrophe encoding
+        'Ã¢ÂÂ': '-',        # Yet another hyphen pattern
+        'ÃÂ': '-',          # Simple hyphen corruption
+        # Add more specific patterns for "Tic-Tac-Toe" corruption
+        'TicâTacâToe': 'Tic-Tac-Toe',
+        'TicÂTacÂToe': 'Tic-Tac-Toe',
+    }
+    
+    applied_fixes = []
+    for bad_char, good_char in fixes.items():
+        if bad_char in text:
+            text = text.replace(bad_char, good_char)
+            applied_fixes.append(f"{bad_char} -> {good_char}")
+    
+    # Log applied fixes for debugging
+    if applied_fixes and logger:
+        logger.info(f"Applied encoding fixes: {', '.join(applied_fixes)}")
+    
+    return text
+
 # Game generation system instructions
 SYSTEM_INSTRUCTIONS_ONE_CALL = """
 You are a senior front-end engineer and compact game designer.
@@ -85,6 +124,9 @@ def generate_game_with_ai(user_prompt: str):
         try:
             game_data = json.loads(content)
             if "title" in game_data and "html" in game_data:
+                # Fix encoding issues in the generated HTML content
+                game_data["html"] = fix_text_encoding(game_data["html"])
+                game_data["title"] = fix_text_encoding(game_data["title"])
                 return game_data
             else:
                 logger.error("Invalid game data structure from OpenAI")
@@ -133,6 +175,8 @@ def refine_game_with_ai(instruction: str, current_html: str):
         logger.info(f"Game refinement completed, HTML length: {len(new_html)}")
         
         if new_html and new_html.startswith("<!"):
+            # Fix encoding issues in the refined HTML content
+            new_html = fix_text_encoding(new_html)
             return new_html
         else:
             logger.error("Invalid HTML returned from refinement")
@@ -551,8 +595,36 @@ def get_game_content(game_id):
         try:
             response = requests.get(game['data_content'], timeout=10)
             if response.status_code == 200:
-                # Return the HTML content with proper headers
-                return response.text, 200, {
+                # Get the HTML content and fix encoding issues
+                html_content = response.text
+                
+                # Log original content length for debugging
+                logger.info(f"Original HTML content length: {len(html_content)}")
+                
+                # Try to fix encoding at byte level first
+                try:
+                    # If the content was improperly decoded, try to re-encode and decode correctly
+                    if 'â' in html_content or 'Â' in html_content:
+                        # Try to fix by re-encoding as latin-1 and decoding as utf-8
+                        try:
+                            fixed_content = html_content.encode('latin-1').decode('utf-8')
+                            html_content = fixed_content
+                            logger.info("Applied byte-level encoding fix")
+                        except (UnicodeEncodeError, UnicodeDecodeError):
+                            # If that fails, use the character-level fixes
+                            pass
+                except Exception as e:
+                    logger.warning(f"Byte-level encoding fix failed: {e}")
+                
+                # Fix common encoding issues in the HTML content
+                html_content = fix_text_encoding(html_content)
+                
+                # Log if changes were made
+                if len(html_content) != len(response.text):
+                    logger.info(f"Encoding fixes applied, new length: {len(html_content)}")
+                
+                # Return the fixed HTML content with proper headers
+                return html_content, 200, {
                     'Content-Type': 'text/html; charset=utf-8',
                     'X-Frame-Options': 'SAMEORIGIN'
                 }
