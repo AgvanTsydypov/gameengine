@@ -51,7 +51,7 @@ class SupabaseManager:
             logger.error(f"Error getting current user: {e}")
             return None
     
-    def save_user_data(self, user_id: str, data_type: str, data_content: str, filename: str = None) -> Optional[Dict[str, Any]]:
+    def save_user_data(self, user_id: str, data_type: str, data_content: str, filename: str = None, title: str = None, description: str = None) -> Optional[Dict[str, Any]]:
         """
         Saves user data to Supabase
         
@@ -76,6 +76,12 @@ class SupabaseManager:
                 "created_at": "now()",
                 "updated_at": "now()"
             }
+            
+            # Add title and description if provided
+            if title:
+                data["title"] = title
+            if description:
+                data["description"] = description
             
             # Use service role key for server-side operations to bypass RLS
             if self.service_role_key:
@@ -302,7 +308,7 @@ class SupabaseManager:
             logger.error(f"Ошибка при удалении файла из storage: {e}")
             return False
     
-    def save_user_file(self, user_id: str, file_content: bytes, filename: str, content_type: str = None) -> Optional[Dict[str, Any]]:
+    def save_user_file(self, user_id: str, file_content: bytes, filename: str, content_type: str = None, title: str = None, description: str = None) -> Optional[Dict[str, Any]]:
         """
         Сохраняет файл пользователя в storage и создает запись в user_data
         
@@ -342,7 +348,9 @@ class SupabaseManager:
                 user_id=user_id,
                 data_type="html_game",
                 data_content=file_url,  # URL файла в storage
-                filename=filename
+                filename=filename,
+                title=title,
+                description=description
             )
             
             if result:

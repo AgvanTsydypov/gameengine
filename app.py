@@ -242,26 +242,31 @@ def index():
             
             # Transform games for homepage
             for game in uploaded_games_raw:
-                # Extract title from filename (remove .html extension)
-                title = game.get('filename', 'Untitled Game')
-                if title.endswith('.html'):
-                    title = title[:-5]
-                title = title.replace('-', ' ').replace('_', ' ').upper()
+                # Use actual user-provided title, fallback to filename if not available
+                title = game.get('title')
+                if not title:
+                    # Fallback: extract title from filename (remove .html extension)
+                    title = game.get('filename', 'Untitled Game')
+                    if title.endswith('.html'):
+                        title = title[:-5]
+                    title = title.replace('-', ' ').replace('_', ' ').title()
                 
-                # Calculate rating based on likes
+                # Use actual user-provided description, fallback to generic
+                description = game.get('description')
+                if not description:
+                    description = f'Trending community game: {title}'
+                
+                # Get stats
                 likes_count = game.get('likes_count', 0)
                 plays_count = game.get('plays_count', 0)
-                rating = min(5.0, 3.0 + (likes_count * 0.5))
                 
                 trending_games.append({
                     'id': game.get('id'),
                     'title': title,
-                    'rating': round(rating, 1),
-                    'category': 'TRENDING',
                     'plays': f"{plays_count}",
                     'likes_count': likes_count,
                     'is_liked': game.get('id') in user_liked_games,
-                    'description': f'Trending community game: {title}'
+                    'description': description
                 })
     except Exception as e:
         logger.error(f"Error fetching trending games: {e}")
@@ -377,26 +382,31 @@ def games():
             
             # Transform uploaded games to match template format
             for game in uploaded_games_raw:
-                # Extract title from filename (remove .html extension)
-                title = game.get('filename', 'Untitled Game')
-                if title.endswith('.html'):
-                    title = title[:-5]
-                title = title.replace('-', ' ').replace('_', ' ').upper()
+                # Use actual user-provided title, fallback to filename if not available
+                title = game.get('title')
+                if not title:
+                    # Fallback: extract title from filename (remove .html extension)
+                    title = game.get('filename', 'Untitled Game')
+                    if title.endswith('.html'):
+                        title = title[:-5]
+                    title = title.replace('-', ' ').replace('_', ' ').title()
                 
-                # Calculate rating based on likes (simple algorithm)
+                # Use actual user-provided description, fallback to generic
+                description = game.get('description')
+                if not description:
+                    description = f'Community game: {title}'
+                
+                # Get stats
                 likes_count = game.get('likes_count', 0)
                 plays_count = game.get('plays_count', 0)
-                rating = min(5.0, 3.0 + (likes_count * 0.5))  # Base 3.0, up to 5.0 based on likes
                 
                 uploaded_games.append({
                     'id': game.get('id'),
                     'title': title,
-                    'category': 'COMMUNITY',
                     'plays': f"{plays_count}",
-                    'rating': round(rating, 1),
                     'likes_count': likes_count,
                     'is_liked': game.get('id') in user_liked_games,
-                    'description': f'Community game: {title}',
+                    'description': description,
                     'type': 'uploaded',
                     'filename': game.get('filename'),
                     'data_content': game.get('data_content'),
@@ -462,7 +472,9 @@ def upload_game():
             user_id=str(session['user_id']),
             file_content=file_content,
             filename=game_file.filename,
-            content_type='text/html'
+            content_type='text/html',
+            title=title,
+            description=description
         )
         
         if result:
@@ -863,7 +875,9 @@ def api_publish_game():
             user_id=str(session['user_id']),
             file_content=html_content.encode('utf-8'),
             filename=filename,
-            content_type='text/html'
+            content_type='text/html',
+            title=title,
+            description=description
         )
         
         if result:

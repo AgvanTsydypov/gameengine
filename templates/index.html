@@ -6,8 +6,8 @@
 <main>
   <section class="hero">
     <div class="kicker"><span class="dot"></span>MINIMAL • PIXEL • SPACE</div>
-    <h1>BUILD AI GAMES. <br/> SHIP FAST. LOOK STELLAR.</h1>
-    <p class="sub">Generate, iterate, and publish — all in one pixel-perfect studio. No noise. Just play.</p>
+    <h1>BUILD AI GAMES. <br/> SHIP FAST. RULE THE GALAXY.</h1>
+    <p class="sub">Generate, iterate, and publish — all in one AI studio. <br/> No noise. Just play.</p>
     <div class="hero-cta">
       {% if session.user_id %}
         <a class="btn btn-cta" href="{{ url_for('create_game') }}"><span>+ CREATE NEW GAME</span></a>
@@ -21,14 +21,13 @@
 
   {% if trending_games %}
   <section id="trending" class="section" aria-labelledby="trend-title">
-    <h2 id="trend-title">TRENDING GAMES</h2>
+    <h2 id="trend-title">🔥 TRENDING GAMES 🔥</h2>
     <div class="games-grid">
       {% for game in trending_games %}
       <div class="game-card">
         <div class="game-card-header">
           <h3 class="game-title">{{ game.title }}</h3>
           <div class="game-meta">
-            <span class="game-type">{{ game.category }}</span>
             <span class="game-date">{{ 'Recent' }}</span>
           </div>
         </div>
@@ -38,7 +37,6 @@
             {{ game.description or 'Trending community game - ' + game.title }}
           </p>
           <div class="game-stats">
-            <span class="game-rating">★ {{ game.rating }}</span>
             <span class="game-plays">{{ game.plays }} PLAYS</span>
             <span class="game-likes">
               {% if session.user_id %}

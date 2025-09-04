@@ -476,6 +476,13 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
 
 .like-btn-action {
   min-width: 100px;
+  font-family: 'Press Start 2P', system-ui, monospace !important;
+  font-size: 11px !important;
+}
+
+.like-btn-action span {
+  font-family: 'Press Start 2P', system-ui, monospace !important;
+  font-size: 11px !important;
 }
 
 .like-btn-action.liked {

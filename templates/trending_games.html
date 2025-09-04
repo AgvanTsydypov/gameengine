@@ -28,7 +28,6 @@
             <div class="game-card-header">
               <h3 class="game-title">{{ game.title or 'Untitled Game' }}</h3>
               <div class="game-meta">
-                <span class="game-type">{{ game.category or 'HTML GAME' }}</span>
                 <span class="game-date">{{ game.created_at[:10] if game.created_at else 'Unknown' }}</span>
               </div>
             </div>

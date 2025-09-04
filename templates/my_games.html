@@ -7,7 +7,7 @@
   <section class="hero">
     <div class="kicker"><span class="dot"></span>MY • GAMES • COLLECTION</div>
     <h1>MY UPLOADED GAMES</h1>
-    <p class="sub">Manage and play your uploaded HTML games</p>
+    <p class="sub">Create, manage, and play your games</p>
   </section>
 
   <section class="section">
@@ -15,7 +15,7 @@
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h2 style="color: var(--cyber); margin: 0;">YOUR GAMES</h2>
         <a href="/create-game" class="btn btn-cta">
-          <span>📤 UPLOAD NEW GAME</span>
+          <span>📤 CREATE NEW GAME</span>
         </a>
       </div>
 
@@ -24,20 +24,15 @@
           {% for game in games %}
           <div class="game-card">
             <div class="game-card-header">
-              <h3 class="game-title">{{ game.filename or 'Untitled Game' }}</h3>
+              <h3 class="game-title">{{ game.title or (game.filename.replace('.html', '').replace('_', ' ').replace('-', ' ').title() if game.filename else 'Untitled Game') }}</h3>
               <div class="game-meta">
-                <span class="game-type">HTML GAME</span>
                 <span class="game-date">{{ game.created_at[:10] if game.created_at else 'Unknown' }}</span>
               </div>
             </div>
             
             <div class="game-card-content">
               <p class="game-description">
-                {% if game.data_content %}
-                  Game file uploaded successfully
-                {% else %}
-                  No description available
-                {% endif %}
+                {{ game.description or 'No description available' }}
               </p>
             </div>
             

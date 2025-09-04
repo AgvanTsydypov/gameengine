@@ -18,7 +18,6 @@
         <div class="game-card-header">
           <h3 class="game-title">{{ game.title }}</h3>
           <div class="game-meta">
-            <span class="game-type">{{ game.category }}</span>
             <span class="game-date">{{ game.created_at[:10] if game.created_at else 'Recent' }}</span>
           </div>
         </div>
@@ -28,7 +27,6 @@
             {{ game.description or 'Community created game - ' + game.title }}
           </p>
           <div class="game-stats">
-            <span class="game-rating">★ {{ game.rating }}</span>
             <span class="game-plays">{{ game.plays }} PLAYS</span>
             <span class="game-likes">
               {% if session.user_id %}
