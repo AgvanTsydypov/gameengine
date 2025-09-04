@@ -12,16 +12,33 @@
 
   <section class="section">
     {% if games %}
-    <div class="grid">
+    <div class="games-grid">
       {% for game in games %}
-      <a href="{{ url_for('play_uploaded_game', game_id=game.id) }}" class="card" aria-label="Play game: {{ game.title }}">
-        <div class="thumb">
-          <span class="badge px-border">★ {{ game.rating }}</span>
-          <span class="badge px-border" style="background: var(--cyber); color: var(--bg);">USER</span>
+      <div class="game-card">
+        <div class="game-card-header">
+          <h3 class="game-title">{{ game.title }}</h3>
+          <div class="game-meta">
+            <span class="game-type">{{ game.category }}</span>
+            <span class="game-date">{{ game.created_at[:10] if game.created_at else 'Recent' }}</span>
+          </div>
         </div>
-        <div class="title">{{ game.title }}</div>
-        <div class="meta">{{ game.category }} • {{ game.plays }} PLAYS</div>
-      </a>
+        
+        <div class="game-card-content">
+          <p class="game-description">
+            {{ game.description or 'Community created game - ' + game.title }}
+          </p>
+          <div class="game-stats">
+            <span class="game-rating">★ {{ game.rating }}</span>
+            <span class="game-plays">{{ game.plays }} PLAYS</span>
+          </div>
+        </div>
+        
+        <div class="game-card-actions">
+          <a href="{{ url_for('play_uploaded_game', game_id=game.id) }}" class="btn btn-primary">
+            <span>🎮 PLAY GAME</span>
+          </a>
+        </div>
+      </div>
       {% endfor %}
     </div>
     {% else %}

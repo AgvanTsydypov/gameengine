@@ -26,8 +26,12 @@ def create_user(email, password):
     try:
         logger.info(f"Creating user: email={email}")
         
+        # Use a separate client instance for user creation to avoid affecting the global client
+        from supabase import create_client
+        auth_client = create_client(supabase_manager.url, supabase_manager.key)
+        
         # Create user in auth.users with email and password only
-        auth_response = supabase_manager.client.auth.sign_up({
+        auth_response = auth_client.auth.sign_up({
             "email": email,
             "password": password
         })
@@ -36,7 +40,8 @@ def create_user(email, password):
         
         if auth_response.user:
             logger.info(f"User {email} successfully created in auth.users with ID: {auth_response.user.id}")
-            
+            # Sign out from the auth client to prevent session persistence
+            auth_client.auth.sign_out()
             return {
                 'user': auth_response.user,
                 'user_id': auth_response.user.id
@@ -61,7 +66,11 @@ def authenticate_user(email, password):
     try:
         logger.info(f"Authentication attempt for user: {email}")
         
-        auth_response = supabase_manager.client.auth.sign_in_with_password({
+        # Use a separate client instance for authentication to avoid affecting the global client
+        from supabase import create_client
+        auth_client = create_client(supabase_manager.url, supabase_manager.key)
+        
+        auth_response = auth_client.auth.sign_in_with_password({
             "email": email,
             "password": password
         })
@@ -70,6 +79,8 @@ def authenticate_user(email, password):
         
         if auth_response.user:
             logger.info(f"Successful authentication for {email}")
+            # Sign out from the auth client immediately to prevent session persistence
+            auth_client.auth.sign_out()
             return {
                 'user': auth_response.user,
                 'email': auth_response.user.email
@@ -193,14 +204,7 @@ def login():
 
 @app.route('/logout')
 def logout():
-    # Sign out from Supabase Auth
-    if supabase_manager.is_connected():
-        try:
-            supabase_manager.client.auth.sign_out()
-        except Exception as e:
-            logger.error(f"Supabase Auth logout error: {e}")
-    
-    # Clear Flask session
+    # Clear Flask session (no need to sign out from Supabase since we don't maintain persistent auth sessions)
     session.clear()
     flash('Successfully logged out.', 'info')
     return redirect(url_for('index'))

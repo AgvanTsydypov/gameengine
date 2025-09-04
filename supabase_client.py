@@ -129,15 +129,16 @@ class SupabaseManager:
             return []
         
         try:
-            # Use service role key for server-side operations to bypass RLS
+            # ALWAYS use service role key to bypass RLS for public community games access
             if self.service_role_key:
                 from supabase import create_client
                 service_client = create_client(self.url, self.service_role_key)
                 response = service_client.table('user_data').select('*').eq('data_type', 'html_game').order('created_at', desc=True).execute()
+                return response.data if response.data else []
             else:
-                response = self.client.table('user_data').select('*').eq('data_type', 'html_game').order('created_at', desc=True).execute()
-            
-            return response.data if response.data else []
+                # If no service role key is configured, we cannot provide public access to all games
+                logger.error("Service role key not configured - cannot bypass RLS for public games access")
+                return []
         except Exception as e:
             logger.error(f"Error getting all uploaded games: {e}")
             return []
@@ -156,17 +157,18 @@ class SupabaseManager:
             return None
         
         try:
-            # Use service role key for server-side operations to bypass RLS
+            # ALWAYS use service role key to bypass RLS for public game access
             if self.service_role_key:
                 from supabase import create_client
                 service_client = create_client(self.url, self.service_role_key)
                 response = service_client.table('user_data').select('*').eq('id', game_id).eq('data_type', 'html_game').execute()
+                if response.data and len(response.data) > 0:
+                    return response.data[0]
+                return None
             else:
-                response = self.client.table('user_data').select('*').eq('id', game_id).eq('data_type', 'html_game').execute()
-            
-            if response.data and len(response.data) > 0:
-                return response.data[0]
-            return None
+                # If no service role key is configured, we cannot provide public access to games
+                logger.error("Service role key not configured - cannot bypass RLS for public game access")
+                return None
         except Exception as e:
             logger.error(f"Error getting game by ID {game_id}: {e}")
             return None
