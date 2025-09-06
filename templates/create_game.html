@@ -34,6 +34,75 @@
               <p>Enter a game idea below and click "Generate" to create your game</p>
             </div>
           </div>
+          
+          <!-- Progress Screen (hidden by default) -->
+          <div class="progress-screen" id="progress-screen" style="display: none;">
+            <div class="progress-content">
+              <div class="progress-header">
+                <p>Creating your personalized game experience...</p>
+              </div>
+              
+              <div class="progress-bar-container">
+                <div class="progress-bar" id="progress-bar">
+                  <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="progress-percentage" id="progress-percentage">0%</div>
+              </div>
+              
+              <div class="progress-stages">
+                <div class="stage" data-stage="0">
+                  <span class="stage-icon">⏳</span>
+                  <span class="stage-text">Generating terrain...</span>
+                  <span class="stage-check">✅</span>
+                </div>
+                <div class="stage" data-stage="1">
+                  <span class="stage-icon">⏳</span>
+                  <span class="stage-text">Building the world...</span>
+                  <span class="stage-check">✅</span>
+                </div>
+                <div class="stage" data-stage="2">
+                  <span class="stage-icon">⏳</span>
+                  <span class="stage-text">Placing objects...</span>
+                  <span class="stage-check">✅</span>
+                </div>
+                <div class="stage" data-stage="3">
+                  <span class="stage-icon">⏳</span>
+                  <span class="stage-text">Spawning characters...</span>
+                  <span class="stage-check">✅</span>
+                </div>
+                <div class="stage" data-stage="4">
+                  <span class="stage-icon">⏳</span>
+                  <span class="stage-text">Adding interactions...</span>
+                  <span class="stage-check">✅</span>
+                </div>
+                <div class="stage" data-stage="5">
+                  <span class="stage-icon">⏳</span>
+                  <span class="stage-text">Balancing gameplay...</span>
+                  <span class="stage-check">✅</span>
+                </div>
+                <div class="stage" data-stage="6">
+                  <span class="stage-icon">⏳</span>
+                  <span class="stage-text">Creating challenges...</span>
+                  <span class="stage-check">✅</span>
+                </div>
+                <div class="stage" data-stage="7">
+                  <span class="stage-icon">⏳</span>
+                  <span class="stage-text">Polishing details...</span>
+                  <span class="stage-check">✅</span>
+                </div>
+                <div class="stage" data-stage="8">
+                  <span class="stage-icon">⏳</span>
+                  <span class="stage-text">Running final checks...</span>
+                  <span class="stage-check">✅</span>
+                </div>
+                <div class="stage" data-stage="9">
+                  <span class="stage-icon">⏳</span>
+                  <span class="stage-text">Almost ready... 🎮</span>
+                  <span class="stage-check">✅</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -58,12 +127,23 @@
           <div class="form-actions">
             <button id="generate-btn" class="btn btn-cta" onclick="generateGame()">
               <span id="generate-text">✨ GENERATE GAME</span>
-              <span id="generate-loading" style="display: none;">🔄 GENERATING...</span>
+              <div id="generate-progress" class="btn-progress" style="display: none;">
+                <div class="btn-progress-fill" id="btn-progress-fill"></div>
+                <span class="btn-progress-text">GENERATING...</span>
+              </div>
             </button>
-            <button id="refine-btn" class="btn btn-ghost" style="display: none;" onclick="refineGame()">
-              <span id="refine-text">🔧 REFINE GAME</span>
-              <span id="refine-loading" style="display: none;">🔄 REFINING...</span>
-            </button>
+            <div class="refine-container" style="display: none;">
+              <button id="refine-btn" class="btn btn-ghost" onclick="refineGame()">
+                <span id="refine-text">🔧 REFINE GAME</span>
+                <div id="refine-progress" class="btn-progress" style="display: none;">
+                  <div class="btn-progress-fill" id="refine-progress-fill"></div>
+                  <span class="btn-progress-text">🔧 REFINE GAME</span>
+                </div>
+              </button>
+              <div class="refine-progress-bar" id="refine-progress-bar" style="display: none;">
+                <div class="refine-progress-fill" id="refine-progress-fill-bar"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -129,6 +209,9 @@
 let currentGameHtml = '';
 let currentGameTitle = '';
 let isGenerating = false;
+let progressInterval = null;
+let progressStartTime = null;
+let gameGenerationComplete = false;
 
 document.addEventListener('DOMContentLoaded', function() {
   // Initialize the interface
@@ -160,7 +243,10 @@ async function generateGame() {
   }
   
   isGenerating = true;
+  gameGenerationComplete = false;
   setGeneratingState(true);
+  showProgressScreen();
+  startProgressAnimation();
   
   try {
     const response = await fetch('/api/generate-game', {
@@ -174,23 +260,37 @@ async function generateGame() {
     const data = await response.json();
     
     if (data.success) {
+      gameGenerationComplete = true;
       currentGameHtml = data.html;
       currentGameTitle = data.title;
       
-      // Update preview
-      displayGamePreview(data.html);
+      // Complete progress quickly if not already done
+      completeProgress();
       
-      // Update UI state
-      showGameInfo(data.title);
-      showGameControls();
-      
-      App.showAlert('Game generated successfully!', 'success');
+      // Wait a brief moment to show completion, then display game
+      setTimeout(() => {
+        hideProgressScreen();
+        displayGamePreview(data.html);
+        showGameInfo(data.title);
+        showGameControls();
+        App.showAlert('Game generated successfully!', 'success');
+      }, 1000);
     } else {
-      App.showAlert(data.error || 'Failed to generate game. Please try again.', 'error');
+      gameGenerationComplete = true;
+      completeProgress();
+      setTimeout(() => {
+        hideProgressScreen();
+        App.showAlert(data.error || 'Failed to generate game. Please try again.', 'error');
+      }, 500);
     }
   } catch (error) {
     console.error('Generation error:', error);
-    App.showAlert('Failed to generate game. Please check your connection and try again.', 'error');
+    gameGenerationComplete = true;
+    completeProgress();
+    setTimeout(() => {
+      hideProgressScreen();
+      App.showAlert('Failed to generate game. Please check your connection and try again.', 'error');
+    }, 500);
   } finally {
     isGenerating = false;
     setGeneratingState(false);
@@ -208,6 +308,7 @@ async function refineGame() {
   
   isGenerating = true;
   setRefiningState(true);
+  startRefineProgress();
   
   try {
     const response = await fetch('/api/refine-game', {
@@ -226,20 +327,28 @@ async function refineGame() {
     if (data.success) {
       currentGameHtml = data.html;
       
-      // Update preview
-      displayGamePreview(data.html);
+      // Complete refine progress
+      completeRefineProgress();
       
-      // Clear the prompt for next refinement
-      document.getElementById('game-prompt').value = '';
-      document.getElementById('game-prompt').style.height = 'auto';
-      
-      App.showAlert('Game refined successfully!', 'success');
+      // Wait a moment then update UI
+      setTimeout(() => {
+        displayGamePreview(data.html);
+        document.getElementById('game-prompt').value = '';
+        document.getElementById('game-prompt').style.height = 'auto';
+        App.showAlert('Game refined successfully!', 'success');
+      }, 800);
     } else {
-      App.showAlert(data.error || 'Failed to refine game. Please try again.', 'error');
+      completeRefineProgress();
+      setTimeout(() => {
+        App.showAlert(data.error || 'Failed to refine game. Please try again.', 'error');
+      }, 500);
     }
   } catch (error) {
     console.error('Refinement error:', error);
-    App.showAlert('Failed to refine game. Please check your connection and try again.', 'error');
+    completeRefineProgress();
+    setTimeout(() => {
+      App.showAlert('Failed to refine game. Please check your connection and try again.', 'error');
+    }, 500);
   } finally {
     isGenerating = false;
     setRefiningState(false);
@@ -275,45 +384,282 @@ function showGameInfo(title) {
 function showGameControls() {
   document.getElementById('fullscreen-btn').style.display = 'inline-block';
   document.getElementById('publish-btn').style.display = 'inline-block';
-  document.getElementById('refine-btn').style.display = 'inline-block';
+  document.querySelector('.refine-container').style.display = 'block';
 }
 
 function setGeneratingState(generating) {
   const generateBtn = document.getElementById('generate-btn');
   const generateText = document.getElementById('generate-text');
-  const generateLoading = document.getElementById('generate-loading');
+  const generateProgress = document.getElementById('generate-progress');
   const promptTextarea = document.getElementById('game-prompt');
   
   if (generating) {
     generateText.style.display = 'none';
-    generateLoading.style.display = 'inline';
+    generateProgress.style.display = 'flex';
     generateBtn.disabled = true;
     promptTextarea.disabled = true;
   } else {
     generateText.style.display = 'inline';
-    generateLoading.style.display = 'none';
+    generateProgress.style.display = 'none';
     generateBtn.disabled = false;
     promptTextarea.disabled = false;
+    // Reset button progress bar
+    const btnProgressFill = document.getElementById('btn-progress-fill');
+    if (btnProgressFill) {
+      btnProgressFill.style.width = '0%';
+    }
   }
 }
 
 function setRefiningState(refining) {
   const refineBtn = document.getElementById('refine-btn');
   const refineText = document.getElementById('refine-text');
-  const refineLoading = document.getElementById('refine-loading');
+  const refineProgress = document.getElementById('refine-progress');
+  const refineProgressBar = document.getElementById('refine-progress-bar');
   const promptTextarea = document.getElementById('game-prompt');
   
   if (refining) {
     refineText.style.display = 'none';
-    refineLoading.style.display = 'inline';
+    refineProgress.style.display = 'flex';
+    refineProgressBar.style.display = 'block';
     refineBtn.disabled = true;
     promptTextarea.disabled = true;
   } else {
     refineText.style.display = 'inline';
-    refineLoading.style.display = 'none';
+    refineProgress.style.display = 'none';
+    refineProgressBar.style.display = 'none';
     refineBtn.disabled = false;
     promptTextarea.disabled = false;
+    // Reset progress bars
+    const refineProgressFill = document.getElementById('refine-progress-fill');
+    const refineProgressFillBar = document.getElementById('refine-progress-fill-bar');
+    if (refineProgressFill) refineProgressFill.style.width = '0%';
+    if (refineProgressFillBar) refineProgressFillBar.style.width = '0%';
   }
+}
+
+// Progress Screen Functions
+function showProgressScreen() {
+  const progressScreen = document.getElementById('progress-screen');
+  const placeholder = document.querySelector('.preview-placeholder');
+  
+  if (placeholder) placeholder.style.display = 'none';
+  if (progressScreen) progressScreen.style.display = 'flex';
+  
+  // Reset progress elements
+  resetProgress();
+}
+
+function hideProgressScreen() {
+  const progressScreen = document.getElementById('progress-screen');
+  const placeholder = document.querySelector('.preview-placeholder');
+  
+  if (progressScreen) progressScreen.style.display = 'none';
+  if (placeholder) placeholder.style.display = 'flex';
+  
+  // Clear progress interval
+  if (progressInterval) {
+    clearInterval(progressInterval);
+    progressInterval = null;
+  }
+}
+
+function resetProgress() {
+  const progressFill = document.getElementById('progress-fill');
+  const progressPercentage = document.getElementById('progress-percentage');
+  const btnProgressFill = document.getElementById('btn-progress-fill');
+  const stages = document.querySelectorAll('.stage');
+  
+  if (progressFill) progressFill.style.width = '0%';
+  if (progressPercentage) progressPercentage.textContent = '0%';
+  if (btnProgressFill) btnProgressFill.style.width = '0%';
+  
+  // Reset all stages
+  stages.forEach(stage => {
+    stage.classList.remove('active', 'completed');
+  });
+}
+
+function startProgressAnimation() {
+  progressStartTime = Date.now();
+  const totalDuration = 180000; // 3 minutes in milliseconds
+  const stages = document.querySelectorAll('.stage');
+  const stageCount = stages.length;
+  
+  // Clear any existing interval
+  if (progressInterval) {
+    clearInterval(progressInterval);
+  }
+  
+  progressInterval = setInterval(() => {
+    if (gameGenerationComplete) {
+      return; // Let completeProgress handle the completion
+    }
+    
+    const elapsed = Date.now() - progressStartTime;
+    const progress = Math.min(elapsed / totalDuration, 0.95); // Cap at 95% until completion
+    const percentage = Math.floor(progress * 100);
+    
+    updateProgressDisplay(percentage);
+    updateButtonProgress(percentage);
+    updateStages(progress, stageCount);
+    
+    // If we've reached 95% and still no response, slow down the progress
+    if (progress >= 0.95) {
+      clearInterval(progressInterval);
+      // Start a slower interval for the final 5%
+      const slowInterval = setInterval(() => {
+        if (gameGenerationComplete) {
+          clearInterval(slowInterval);
+          return;
+        }
+        const currentPercentage = parseInt(document.getElementById('progress-percentage').textContent);
+        if (currentPercentage < 99) {
+          const newPercentage = currentPercentage + 1;
+          updateProgressDisplay(newPercentage);
+          updateButtonProgress(newPercentage);
+        }
+      }, 5000); // Add 1% every 5 seconds
+    }
+  }, 200); // Update every 200ms for smooth animation
+}
+
+function updateProgressDisplay(percentage) {
+  const progressFill = document.getElementById('progress-fill');
+  const progressPercentage = document.getElementById('progress-percentage');
+  
+  if (progressFill) progressFill.style.width = percentage + '%';
+  if (progressPercentage) progressPercentage.textContent = percentage + '%';
+}
+
+function updateButtonProgress(percentage) {
+  const btnProgressFill = document.getElementById('btn-progress-fill');
+  if (btnProgressFill) btnProgressFill.style.width = percentage + '%';
+}
+
+function updateStages(progress, stageCount) {
+  const stages = document.querySelectorAll('.stage');
+  const currentStageIndex = Math.floor(progress * stageCount);
+  
+  stages.forEach((stage, index) => {
+    if (index < currentStageIndex) {
+      stage.classList.remove('active');
+      stage.classList.add('completed');
+    } else if (index === currentStageIndex) {
+      stage.classList.add('active');
+      stage.classList.remove('completed');
+    } else {
+      stage.classList.remove('active', 'completed');
+    }
+  });
+}
+
+function completeProgress() {
+  // Clear any existing interval
+  if (progressInterval) {
+    clearInterval(progressInterval);
+    progressInterval = null;
+  }
+  
+  const stages = document.querySelectorAll('.stage');
+  
+  // Quickly complete all remaining progress
+  const completion = setInterval(() => {
+    const currentPercentage = parseInt(document.getElementById('progress-percentage').textContent) || 0;
+    
+    if (currentPercentage >= 100) {
+      clearInterval(completion);
+      // Mark all stages as completed
+      stages.forEach(stage => {
+        stage.classList.remove('active');
+        stage.classList.add('completed');
+      });
+      return;
+    }
+    
+    const newPercentage = Math.min(currentPercentage + 10, 100);
+    updateProgressDisplay(newPercentage);
+    updateButtonProgress(newPercentage);
+    updateStages(newPercentage / 100, stages.length);
+  }, 100); // Fast completion
+}
+
+// Refine Progress Functions
+let refineProgressInterval = null;
+let refineComplete = false;
+
+function startRefineProgress() {
+  refineComplete = false;
+  const refineProgressFill = document.getElementById('refine-progress-fill');
+  const refineProgressFillBar = document.getElementById('refine-progress-fill-bar');
+  
+  if (refineProgressFill) refineProgressFill.style.width = '0%';
+  if (refineProgressFillBar) refineProgressFillBar.style.width = '0%';
+  
+  const totalDuration = 180000; // 3 minutes in milliseconds
+  const startTime = Date.now();
+  
+  // Clear any existing interval
+  if (refineProgressInterval) {
+    clearInterval(refineProgressInterval);
+  }
+  
+  refineProgressInterval = setInterval(() => {
+    if (refineComplete) {
+      return; // Let completeRefineProgress handle completion
+    }
+    
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min((elapsed / totalDuration) * 100, 95); // Cap at 95% until completion
+    
+    if (refineProgressFill) refineProgressFill.style.width = progress + '%';
+    if (refineProgressFillBar) refineProgressFillBar.style.width = progress + '%';
+    
+    // If we've reached 95% and still no response, slow down the progress
+    if (progress >= 95) {
+      clearInterval(refineProgressInterval);
+      // Start a slower interval for the final 5%
+      const slowInterval = setInterval(() => {
+        if (refineComplete) {
+          clearInterval(slowInterval);
+          return;
+        }
+        const currentProgress = parseFloat(refineProgressFillBar?.style.width) || 95;
+        if (currentProgress < 99) {
+          const newProgress = currentProgress + 0.5;
+          if (refineProgressFill) refineProgressFill.style.width = newProgress + '%';
+          if (refineProgressFillBar) refineProgressFillBar.style.width = newProgress + '%';
+        }
+      }, 5000); // Add 0.5% every 5 seconds
+    }
+  }, 200); // Update every 200ms for smooth animation
+}
+
+function completeRefineProgress() {
+  refineComplete = true;
+  
+  // Clear any existing interval
+  if (refineProgressInterval) {
+    clearInterval(refineProgressInterval);
+    refineProgressInterval = null;
+  }
+  
+  const refineProgressFill = document.getElementById('refine-progress-fill');
+  const refineProgressFillBar = document.getElementById('refine-progress-fill-bar');
+  
+  // Quickly complete to 100%
+  const completion = setInterval(() => {
+    const currentProgress = parseInt(refineProgressFill?.style.width) || 0;
+    
+    if (currentProgress >= 100) {
+      clearInterval(completion);
+      return;
+    }
+    
+    const newProgress = Math.min(currentProgress + 15, 100);
+    if (refineProgressFill) refineProgressFill.style.width = newProgress + '%';
+    if (refineProgressFillBar) refineProgressFillBar.style.width = newProgress + '%';
+  }, 50); // Very fast completion
 }
 
 function toggleFullscreen() {
@@ -687,13 +1033,215 @@ document.getElementById('publish-modal').addEventListener('click', function(e) {
   }
 }
 
-/* Loading animation */
+/* Progress Screen Styles */
+.progress-screen {
+  height: 100%;
+  background: linear-gradient(135deg, var(--bg) 0%, rgba(0, 255, 255, 0.05) 100%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.progress-content {
+  text-align: center;
+  max-width: 380px;
+  width: 100%;
+  margin-top: 20px;
+}
+
+.progress-header h3 {
+  color: var(--cyber);
+  margin: 0 0 8px 0;
+  font-size: 16px;
+}
+
+.progress-header p {
+  color: var(--muted);
+  margin: 0 0 24px 0;
+  font-size: 11px;
+}
+
+.progress-bar-container {
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--line);
+  border: 2px solid var(--line);
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00ff88, #00cc66);
+  width: 0%;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.progress-percentage {
+  position: absolute;
+  top: -24px;
+  right: 0;
+  color: var(--cyber);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.progress-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.stage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  transition: all 0.3s ease;
+  min-height: 32px;
+}
+
+.stage.active {
+  background: rgba(0, 255, 255, 0.1);
+  border-color: var(--cyber);
+}
+
+.stage.completed {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: #00ff88;
+}
+
+.stage-icon {
+  font-size: 12px;
+  width: 16px;
+  text-align: center;
+}
+
+.stage-text {
+  flex: 1;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.stage-check {
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.stage.completed .stage-check {
+  opacity: 1;
+}
+
+.stage.completed .stage-icon {
+  opacity: 0.3;
+}
+
+/* Button Progress Bar Styles */
+.btn-progress {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #121525, #0e1120);
+  overflow: hidden;
+}
+
+.btn-progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: linear-gradient(90deg, #00ff88, #00cc66);
+  transition: width 0.3s ease;
+  opacity: 0.3;
+}
+
+.btn-progress-text {
+  position: relative;
+  z-index: 2;
+  color: var(--fg);
+  font-family: 'Press Start 2P', system-ui, monospace;
+  font-size: 11px;
+}
+
+/* Refine Progress Bar Styles */
+.refine-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.refine-container .btn {
+  width: 100%;
+}
+
+.refine-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  border-radius: 0;
+}
+
+.refine-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00ff88, #00cc66);
+  width: 0%;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.refine-progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+  animation: shimmer 1.5s infinite;
+}
+
+/* Loading animation for refine button (keep existing) */
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
-#generate-loading, #refine-loading {
+#refine-loading {
   animation: spin 1s linear infinite;
 }
 </style>

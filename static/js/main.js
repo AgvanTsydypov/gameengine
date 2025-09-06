@@ -417,7 +417,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.success) {
                 // Update all like buttons and displays for this game
                 updateLikeUI(gameId, data.is_liked);
-                showAlert(data.message, 'success');
+                // Removed success notification for like/unlike actions
             } else {
                 showAlert(data.error || 'Failed to update like status', 'error');
             }
