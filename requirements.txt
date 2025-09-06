@@ -66,3 +66,7 @@ gevent==23.9.1
 numpy==1.26.4
 
 openai[datalib]>=1.0.0,<2
+
+# For HTML preview generation
+selenium==4.15.2
+webdriver-manager==4.0.1

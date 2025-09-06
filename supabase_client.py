@@ -2,6 +2,7 @@
 Supabase Client Module
 """
 import os
+import uuid
 from supabase import create_client, Client
 from typing import Optional, Dict, Any, List
 import logging
@@ -51,7 +52,7 @@ class SupabaseManager:
             logger.error(f"Error getting current user: {e}")
             return None
     
-    def save_user_data(self, user_id: str, data_type: str, data_content: str, filename: str = None, title: str = None, description: str = None) -> Optional[Dict[str, Any]]:
+    def save_user_data(self, user_id: str, data_type: str, data_content: str, filename: str = None, title: str = None, description: str = None, thumbnail_url: str = None) -> Optional[Dict[str, Any]]:
         """
         Saves user data to Supabase
         
@@ -60,6 +61,9 @@ class SupabaseManager:
             data_type: Data type
             data_content: Data content
             filename: File name (optional)
+            title: Game title (optional)
+            description: Game description (optional)
+            thumbnail_url: Thumbnail URL (optional)
             
         Returns:
             Dictionary with saved record data or None on error
@@ -77,11 +81,13 @@ class SupabaseManager:
                 "updated_at": "now()"
             }
             
-            # Add title and description if provided
+            # Add title, description, and thumbnail_url if provided
             if title:
                 data["title"] = title
             if description:
                 data["description"] = description
+            if thumbnail_url:
+                data["thumbnail_url"] = thumbnail_url
             
             # Use service role key for server-side operations to bypass RLS
             if self.service_role_key:
@@ -308,7 +314,7 @@ class SupabaseManager:
             logger.error(f"Ошибка при удалении файла из storage: {e}")
             return False
     
-    def save_user_file(self, user_id: str, file_content: bytes, filename: str, content_type: str = None, title: str = None, description: str = None) -> Optional[Dict[str, Any]]:
+    def save_user_file(self, user_id: str, file_content: bytes, filename: str, content_type: str = None, title: str = None, description: str = None, thumbnail_path: str = None) -> Optional[Dict[str, Any]]:
         """
         Сохраняет файл пользователя в storage и создает запись в user_data
         
@@ -317,6 +323,9 @@ class SupabaseManager:
             file_content: Содержимое файла в байтах
             filename: Имя файла
             content_type: MIME тип файла
+            title: Заголовок игры
+            description: Описание игры
+            thumbnail_path: Путь к файлу превью
             
         Returns:
             Словарь с данными сохраненного файла или None при ошибке
@@ -343,6 +352,43 @@ class SupabaseManager:
                 logger.error("Не удалось загрузить файл в storage")
                 return None
             
+            # Upload thumbnail if provided
+            thumbnail_url = None
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                try:
+                    # Create thumbnail path in storage
+                    thumbnail_id = str(uuid.uuid4())
+                    thumbnail_storage_path = f"thumbnails/{user_id}/{thumbnail_id}.png"
+                    
+                    logger.info(f"Attempting to upload thumbnail: {thumbnail_path}")
+                    logger.info(f"Thumbnail size: {os.path.getsize(thumbnail_path)} bytes")
+                    logger.info(f"Storage path: {thumbnail_storage_path}")
+                    
+                    # Read thumbnail file
+                    with open(thumbnail_path, 'rb') as thumb_file:
+                        thumbnail_content = thumb_file.read()
+                    
+                    logger.info(f"Read thumbnail content: {len(thumbnail_content)} bytes")
+                    
+                    # Upload thumbnail to storage (without content type to avoid MIME type restrictions)
+                    thumbnail_url = self.upload_file_to_storage_with_service_role(
+                        bucket_name="game-files",
+                        file_path=thumbnail_storage_path,
+                        file_content=thumbnail_content,
+                        content_type=None  # Remove content type to avoid MIME type restrictions
+                    )
+                    
+                    if thumbnail_url:
+                        logger.info(f"Thumbnail uploaded successfully: {thumbnail_url}")
+                    else:
+                        logger.warning("Failed to upload thumbnail, continuing without it")
+                        
+                except Exception as e:
+                    logger.error(f"Error uploading thumbnail: {e}")
+                    import traceback
+                    logger.error(f"Full traceback: {traceback.format_exc()}")
+                    # Continue without thumbnail
+            
             # Сохраняем информацию о файле в user_data
             result = self.save_user_data(
                 user_id=user_id,
@@ -350,7 +396,8 @@ class SupabaseManager:
                 data_content=file_url,  # URL файла в storage
                 filename=filename,
                 title=title,
-                description=description
+                description=description,
+                thumbnail_url=thumbnail_url
             )
             
             if result:
@@ -362,6 +409,14 @@ class SupabaseManager:
         except Exception as e:
             logger.error(f"Ошибка при сохранении файла пользователя: {e}")
             return None
+        finally:
+            # Clean up thumbnail file if it was created locally
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                try:
+                    os.unlink(thumbnail_path)
+                    logger.info(f"Cleaned up temporary thumbnail file: {thumbnail_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up thumbnail file: {e}")
     
     def upload_file_to_storage_with_service_role(self, bucket_name: str, file_path: str, file_content: bytes, content_type: str = None) -> Optional[str]:
         """
@@ -381,9 +436,14 @@ class SupabaseManager:
             return None
         
         try:
+            logger.info(f"Creating service client for bucket: {bucket_name}")
             # Создаем клиент с service role key для обхода RLS
             from supabase import create_client
             service_client = create_client(self.url, self.service_role_key)
+            
+            logger.info(f"Attempting to upload file to {bucket_name}/{file_path}")
+            logger.info(f"File content size: {len(file_content)} bytes")
+            logger.info(f"Content type: {content_type}")
             
             # Загружаем файл в storage
             response = service_client.storage.from_(bucket_name).upload(
@@ -392,16 +452,22 @@ class SupabaseManager:
                 file_options={"content-type": content_type} if content_type else None
             )
             
+            logger.info(f"Upload response: {response}")
+            
             if response:
                 # Получаем публичный URL файла
                 public_url = service_client.storage.from_(bucket_name).get_public_url(file_path)
                 logger.info(f"Файл {file_path} успешно загружен в bucket {bucket_name}")
+                logger.info(f"Public URL: {public_url}")
                 return public_url
-            
-            return None
+            else:
+                logger.error("Upload response was empty or None")
+                return None
             
         except Exception as e:
             logger.error(f"Ошибка при загрузке файла в storage: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return None
 
     # ============ LIKES SYSTEM METHODS ============

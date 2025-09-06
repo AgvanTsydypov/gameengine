@@ -158,3 +158,6 @@ logs/
 # Temporary files
 tmp/
 temp/
+
+test_deepseek_prompt.py
+html_preview_generator.py

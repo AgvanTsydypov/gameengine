@@ -3,9 +3,11 @@ from datetime import datetime
 import os
 import logging
 import json
+import tempfile
 from config import config
 from supabase_client import supabase_manager
 from stripe_client import stripe_manager
+from html_preview_generator import HTMLPreviewGenerator
 import openai
 
 # Logging configuration
@@ -69,6 +71,54 @@ def fix_text_encoding(text):
         logger.info(f"Applied encoding fixes: {', '.join(applied_fixes)}")
     
     return text
+
+def generate_game_thumbnail(html_content: str, game_title: str) -> str:
+    """
+    Generate a thumbnail for a game using the HTML preview generator
+    
+    Args:
+        html_content: The HTML content of the game
+        game_title: The title of the game
+        
+    Returns:
+        Path to the generated thumbnail file, or None if failed
+    """
+    try:
+        # Create a temporary HTML file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
+            temp_file.write(html_content)
+            temp_html_path = temp_file.name
+        
+        # Generate thumbnail using HTMLPreviewGenerator
+        generator = HTMLPreviewGenerator(headless=True, window_size=(800, 600))
+        
+        try:
+            # Generate the thumbnail
+            thumbnail_path = generator.generate_preview(
+                html_file_path=temp_html_path,
+                wait_time=5  # Wait longer for games to load
+            )
+            
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                logger.info(f"Thumbnail generated successfully: {thumbnail_path}")
+                return thumbnail_path
+            else:
+                logger.error("Failed to generate thumbnail")
+                return None
+                
+        finally:
+            generator.close()
+            
+    except Exception as e:
+        logger.error(f"Error generating thumbnail: {e}")
+        return None
+    finally:
+        # Clean up temporary HTML file
+        try:
+            if 'temp_html_path' in locals() and os.path.exists(temp_html_path):
+                os.unlink(temp_html_path)
+        except Exception as e:
+            logger.warning(f"Failed to clean up temporary file: {e}")
 
 # Game generation system instructions
 SYSTEM_INSTRUCTIONS_ONE_CALL = """
@@ -311,7 +361,8 @@ def index():
                     'likes_count': likes_count,
                     'is_liked': game.get('id') in user_liked_games,
                     'description': description,
-                    'created_at': game.get('created_at')
+                    'created_at': game.get('created_at'),
+                    'thumbnail_url': game.get('thumbnail_url')
                 })
     except Exception as e:
         logger.error(f"Error fetching trending games: {e}")
@@ -455,7 +506,8 @@ def games():
                     'type': 'uploaded',
                     'filename': game.get('filename'),
                     'data_content': game.get('data_content'),
-                    'created_at': game.get('created_at')
+                    'created_at': game.get('created_at'),
+                    'thumbnail_url': game.get('thumbnail_url')
                 })
     except Exception as e:
         logger.error(f"Error fetching uploaded games: {e}")
@@ -508,9 +560,14 @@ def upload_game():
         
         # Read file content
         file_content = game_file.read()
+        html_content = file_content.decode('utf-8')
         
         if not supabase_manager.is_connected():
             return jsonify({'error': 'Storage service not available'}), 500
+        
+        # Generate thumbnail for the game
+        logger.info(f"Generating thumbnail for game: {title}")
+        thumbnail_path = generate_game_thumbnail(html_content, title)
         
         # Save file to Supabase storage and create user_data record
         result = supabase_manager.save_user_file(
@@ -519,7 +576,8 @@ def upload_game():
             filename=game_file.filename,
             content_type='text/html',
             title=title,
-            description=description
+            description=description,
+            thumbnail_path=thumbnail_path
         )
         
         if result:
@@ -939,6 +997,10 @@ def api_publish_game():
         if not supabase_manager.is_connected():
             return jsonify({'error': 'Storage service not available'}), 500
         
+        # Generate thumbnail for the AI-generated game
+        logger.info(f"Generating thumbnail for AI-generated game: {title}")
+        thumbnail_path = generate_game_thumbnail(html_content, title)
+        
         # Create a filename based on title
         safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
         filename = f"{safe_title.replace(' ', '_').lower()}.html"
@@ -950,7 +1012,8 @@ def api_publish_game():
             filename=filename,
             content_type='text/html',
             title=title,
-            description=description
+            description=description,
+            thumbnail_path=thumbnail_path
         )
         
         if result:

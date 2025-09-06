@@ -23,6 +23,12 @@
         <div class="games-grid">
           {% for game in games %}
           <div class="game-card">
+            {% if game.thumbnail_url %}
+            <div class="game-thumbnail">
+              <img src="{{ game.thumbnail_url }}" alt="{{ game.title }} preview" loading="lazy">
+            </div>
+            {% endif %}
+            
             <div class="game-card-header">
               <h3 class="game-title">{{ game.title or (game.filename.replace('.html', '').replace('_', ' ').replace('-', ' ').title() if game.filename else 'Untitled Game') }}</h3>
               <div class="game-meta">
@@ -120,6 +126,28 @@ function deleteGame(gameId) {
 .game-card-header {
   padding: 20px 20px 16px;
   border-bottom: 1px solid var(--line);
+}
+
+.game-thumbnail {
+  width: 100%;
+  height: 200px;
+  overflow: hidden;
+  background: var(--grid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+  transition: transform 0.3s ease;
+}
+
+.game-thumbnail:hover img {
+  transform: scale(1.05);
 }
 
 .game-title {

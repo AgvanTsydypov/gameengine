@@ -25,6 +25,12 @@
     <div class="games-grid">
       {% for game in trending_games %}
       <div class="game-card">
+        {% if game.thumbnail_url %}
+        <div class="game-thumbnail">
+          <img src="{{ game.thumbnail_url }}" alt="{{ game.title }} preview" loading="lazy">
+        </div>
+        {% endif %}
+        
         <div class="game-card-header">
           <h3 class="game-title">{{ game.title }}</h3>
           <div class="game-meta">
