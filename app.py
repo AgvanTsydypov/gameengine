@@ -310,7 +310,8 @@ def index():
                     'plays': f"{plays_count}",
                     'likes_count': likes_count,
                     'is_liked': game.get('id') in user_liked_games,
-                    'description': description
+                    'description': description,
+                    'created_at': game.get('created_at')
                 })
     except Exception as e:
         logger.error(f"Error fetching trending games: {e}")
