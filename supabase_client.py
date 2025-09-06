@@ -185,7 +185,7 @@ class SupabaseManager:
     
     def delete_user_data(self, data_id: str, user_id: str) -> bool:
         """
-        Удаляет данные пользователя
+        Удаляет данные пользователя и связанные файлы из storage
         
         Args:
             data_id: ID записи данных
@@ -202,9 +202,63 @@ class SupabaseManager:
             if self.service_role_key:
                 from supabase import create_client
                 service_client = create_client(self.url, self.service_role_key)
+                
+                # First, get the game data to check if it has a storage file
+                game_data_response = service_client.table('user_data').select('*').eq('id', data_id).eq('user_id', user_id).execute()
+                
+                if game_data_response.data and len(game_data_response.data) > 0:
+                    game_data = game_data_response.data[0]
+                    
+                    # Check if this is an html_game with a storage file
+                    if game_data.get('data_type') == 'html_game' and game_data.get('data_content'):
+                        storage_url = game_data.get('data_content')
+                        
+                        # Extract file path from storage URL
+                        # Storage URL format: https://xxx.supabase.co/storage/v1/object/public/bucket-name/file-path
+                        if '/storage/v1/object/public/' in storage_url:
+                            try:
+                                # Extract the file path after the bucket name
+                                url_parts = storage_url.split('/storage/v1/object/public/')
+                                if len(url_parts) > 1:
+                                    # Get bucket and file path: bucket-name/file-path
+                                    bucket_and_path = url_parts[1]
+                                    
+                                    # Remove query parameters if present (e.g., trailing ? or other params)
+                                    if '?' in bucket_and_path:
+                                        bucket_and_path = bucket_and_path.split('?')[0]
+                                    
+                                    path_parts = bucket_and_path.split('/', 1)
+                                    if len(path_parts) > 1:
+                                        bucket_name = path_parts[0]
+                                        file_path = path_parts[1]
+                                        
+                                        # Delete file from storage
+                                        logger.info(f"Attempting to delete file from storage: bucket='{bucket_name}', path='{file_path}'")
+                                        
+                                        try:
+                                            delete_response = service_client.storage.from_(bucket_name).remove([file_path])
+                                            logger.info(f"Storage delete response: {delete_response}")
+                                            
+                                            if delete_response:
+                                                logger.info(f"✅ Successfully deleted file '{file_path}' from bucket '{bucket_name}'")
+                                            else:
+                                                logger.warning(f"⚠️ Storage delete returned empty response for file '{file_path}' in bucket '{bucket_name}'")
+                                        except Exception as delete_error:
+                                            logger.error(f"❌ Error calling storage delete API: {delete_error}")
+                                    else:
+                                        logger.error(f"❌ Could not extract file path from bucket_and_path: '{bucket_and_path}'")
+                                else:
+                                    logger.error(f"❌ Could not find storage path in URL: '{storage_url}'")
+                            except Exception as storage_error:
+                                logger.error(f"❌ Error parsing storage URL '{storage_url}': {storage_error}")
+                                # Continue with database deletion even if storage deletion fails
+                
+                # Delete the database record
                 response = service_client.table('user_data').delete().eq('id', data_id).eq('user_id', user_id).execute()
             else:
+                # Fallback to regular client (won't be able to delete from storage without service role)
                 response = self.client.table('user_data').delete().eq('id', data_id).eq('user_id', user_id).execute()
+                logger.warning("Service role key not available - cannot delete files from storage")
             
             logger.info(f"Данные {data_id} пользователя {user_id} успешно удалены")
             return True
