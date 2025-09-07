@@ -70,3 +70,9 @@ openai[datalib]>=1.0.0,<2
 # For HTML preview generation
 selenium==4.15.2
 webdriver-manager==4.0.1
+
+# For image processing and thumbnail generation
+Pillow==10.1.0
+
+# For better Chrome/ChromeDriver management on Render
+undetected-chromedriver==3.5.4

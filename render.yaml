@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: game-platform
+    env: python
+    plan: starter
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: python setup_render.py && gunicorn -k gthread -w 1 --threads 8 --timeout 300 --graceful-timeout 180 --keep-alive 5 app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PORT
+        value: 8000
+      - key: RENDER
+        value: true
+    healthCheckPath: /
