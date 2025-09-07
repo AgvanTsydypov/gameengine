@@ -130,58 +130,131 @@ class HTMLPreviewGenerator:
         
     def setup_driver(self):
         """Setup Chrome WebDriver with appropriate options."""
-        try:
-            # Try undetected-chromedriver first (better for Render.com)
-            if self.is_render_env:
-                self.logger.info("Setting up undetected Chrome driver for Render.com")
-                options = uc.ChromeOptions()
-                if self.headless:
-                    options.add_argument("--headless")
-                options.add_argument("--no-sandbox")
-                options.add_argument("--disable-dev-shm-usage")
-                options.add_argument("--disable-gpu")
-                options.add_argument("--disable-extensions")
-                options.add_argument("--disable-logging")
-                options.add_argument("--disable-web-security")
-                options.add_argument("--allow-running-insecure-content")
-                options.add_argument(f"--window-size={self.window_size[0]},{self.window_size[1]}")
-                
-                self.driver = uc.Chrome(options=options)
-                self.driver.set_window_size(self.window_size[0], self.window_size[1])
-                self.logger.info("✓ Undetected Chrome WebDriver initialized")
-                return True
-            
-            # Fallback to regular Selenium
-            chrome_options = Options()
-            
-            if self.headless:
-                chrome_options.add_argument("--headless")
-            
-            # Additional options for better rendering
-            chrome_options.add_argument("--no-sandbox")
-            chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--disable-extensions")
-            chrome_options.add_argument("--disable-logging")
-            chrome_options.add_argument("--disable-web-security")
-            chrome_options.add_argument("--allow-running-insecure-content")
-            chrome_options.add_argument(f"--window-size={self.window_size[0]},{self.window_size[1]}")
-            
-            # Set user agent
-            chrome_options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            
-            # Initialize the driver with automatic ChromeDriver management
-            service = Service(ChromeDriverManager().install())
+        # Try multiple methods to initialize Chrome driver
+        methods = []
+        
+        if self.is_render_env:
+            methods.append(("undetected-chromedriver", self._setup_undetected_chrome))
+        
+        methods.extend([
+            ("regular-selenium", self._setup_regular_selenium),
+            ("webdriver-manager", self._setup_webdriver_manager)
+        ])
+        
+        for method_name, method_func in methods:
+            try:
+                self.logger.info(f"Trying {method_name}...")
+                if method_func():
+                    self.logger.info(f"✓ {method_name} initialized successfully")
+                    return True
+            except Exception as e:
+                self.logger.warning(f"✗ {method_name} failed: {e}")
+                continue
+        
+        self.logger.error("All Chrome driver methods failed, will use fallback method")
+        return False
+    
+    def _setup_undetected_chrome(self):
+        """Setup undetected Chrome driver"""
+        options = uc.ChromeOptions()
+        if self.headless:
+            options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-logging")
+        options.add_argument("--disable-web-security")
+        options.add_argument("--allow-running-insecure-content")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument(f"--window-size={self.window_size[0]},{self.window_size[1]}")
+        
+        self.driver = uc.Chrome(options=options)
+        self.driver.set_window_size(self.window_size[0], self.window_size[1])
+        return True
+    
+    def _setup_regular_selenium(self):
+        """Setup regular Selenium Chrome driver"""
+        chrome_options = Options()
+        
+        if self.headless:
+            chrome_options.add_argument("--headless")
+        
+        # Additional options for better rendering
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-logging")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--allow-running-insecure-content")
+        chrome_options.add_argument(f"--window-size={self.window_size[0]},{self.window_size[1]}")
+        
+        # Set user agent
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        
+        # Try to find Chrome binary
+        chrome_paths = [
+            '/usr/bin/google-chrome',
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/chromium-browser',
+            '/usr/bin/chromium'
+        ]
+        
+        chrome_binary = None
+        for path in chrome_paths:
+            if os.path.exists(path):
+                chrome_binary = path
+                break
+        
+        if chrome_binary:
+            chrome_options.binary_location = chrome_binary
+            self.logger.info(f"Using Chrome binary: {chrome_binary}")
+        
+        # Try to find ChromeDriver
+        chromedriver_paths = [
+            '/usr/local/bin/chromedriver',
+            '/usr/bin/chromedriver',
+            '/opt/chromedriver'
+        ]
+        
+        chromedriver_binary = None
+        for path in chromedriver_paths:
+            if os.path.exists(path):
+                chromedriver_binary = path
+                break
+        
+        if chromedriver_binary:
+            service = Service(chromedriver_binary)
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            self.driver.set_window_size(self.window_size[0], self.window_size[1])
-            
-            self.logger.info(f"✓ Chrome WebDriver initialized (headless: {self.headless})")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"✗ Failed to initialize Chrome WebDriver: {e}")
-            self.logger.info("Chrome/ChromeDriver not available, will use fallback method")
-            return False
+        else:
+            # Try without specifying service
+            self.driver = webdriver.Chrome(options=chrome_options)
+        
+        self.driver.set_window_size(self.window_size[0], self.window_size[1])
+        return True
+    
+    def _setup_webdriver_manager(self):
+        """Setup Chrome driver using webdriver-manager"""
+        chrome_options = Options()
+        
+        if self.headless:
+            chrome_options.add_argument("--headless")
+        
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-logging")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--allow-running-insecure-content")
+        chrome_options.add_argument(f"--window-size={self.window_size[0]},{self.window_size[1]}")
+        
+        # Initialize the driver with automatic ChromeDriver management
+        service = Service(ChromeDriverManager().install())
+        self.driver = webdriver.Chrome(service=service, options=chrome_options)
+        self.driver.set_window_size(self.window_size[0], self.window_size[1])
+        return True
     
     def generate_preview(self, html_file_path, output_path=None, wait_time=3):
         """
@@ -207,7 +280,7 @@ class HTMLPreviewGenerator:
         # Try to setup driver, if it fails, use fallback
         if not self.driver:
             if not self.setup_driver():
-                self.logger.warning("Selenium setup failed, using fallback thumbnail generation")
+                self.logger.warning("All Selenium methods failed, using fallback thumbnail generation")
                 # Read HTML content for fallback
                 try:
                     with open(html_file_path, 'r', encoding='utf-8') as f:
