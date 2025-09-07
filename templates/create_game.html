@@ -190,11 +190,15 @@
         </div>
         
         <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" onclick="closePublishModal()" style="display: inline-flex; visibility: visible; opacity: 1; color: #e6e6ea !important; font-size: 13px;">
+          <button type="button" class="btn btn-ghost" onclick="closePublishModal()" id="publish-cancel-btn" style="display: inline-flex; visibility: visible; opacity: 1; color: #e6e6ea !important; font-size: 13px;">
             <span style="color: #e6e6ea !important; position: relative; z-index: 100;">CANCEL</span>
           </button>
-          <button type="submit" class="btn btn-cta" style="display: inline-flex; visibility: visible; opacity: 1; color: #e6e6ea !important; font-size: 13px;">
-            <span style="color: #e6e6ea !important; position: relative; z-index: 100;">🚀 PUBLISH TO COMMUNITY</span>
+          <button type="submit" class="btn btn-cta" id="publish-submit-btn" style="display: inline-flex; visibility: visible; opacity: 1; color: #e6e6ea !important; font-size: 13px; position: relative;">
+            <span id="publish-text" style="color: #e6e6ea !important; position: relative; z-index: 100;">🚀 PUBLISH TO COMMUNITY</span>
+            <div id="publish-progress" class="btn-progress" style="display: none;">
+              <div class="btn-progress-fill" id="publish-progress-fill"></div>
+              <span class="btn-progress-text">PUBLISHING...</span>
+            </div>
           </button>
         </div>
       </form>
@@ -687,9 +691,12 @@ function publishGame() {
   document.getElementById('publish-title').value = title;
   document.getElementById('publish-description').value = `AI-generated game: ${title}`;
   
-  const modal = document.getElementById('publish-modal');
-  modal.style.display = 'flex';
-  modal.classList.add('show');
+  // Ensure the form is properly populated
+  setTimeout(() => {
+    const modal = document.getElementById('publish-modal');
+    modal.style.display = 'flex';
+    modal.classList.add('show');
+  }, 100);
 }
 
 function closePublishModal() {
@@ -707,11 +714,50 @@ document.getElementById('publish-form').addEventListener('submit', async functio
     return;
   }
   
-  const formData = new FormData(this);
+  // Set publishing state
+  setPublishingState(true);
+  startPublishingProgress();
+  
+  // Get form values directly from the input elements
+  const titleInput = document.getElementById('publish-title');
+  const descriptionInput = document.getElementById('publish-description');
+  
+  console.log('Form elements found:', { 
+    titleInput: !!titleInput, 
+    descriptionInput: !!descriptionInput,
+    titleValue: titleInput?.value,
+    descriptionValue: descriptionInput?.value
+  });
+  
+  const title = titleInput ? titleInput.value.trim() : '';
+  const description = descriptionInput ? descriptionInput.value.trim() : '';
+  const html_content = currentGameHtml || '';
+  
+  console.log('Form data:', { title, description, html_content_length: html_content.length });
+  
+  // Validate required fields
+  if (!title) {
+    App.showAlert('Game title is required.', 'error');
+    setPublishingState(false);
+    return;
+  }
+  
+  if (!description) {
+    App.showAlert('Game description is required.', 'error');
+    setPublishingState(false);
+    return;
+  }
+  
+  if (!html_content) {
+    App.showAlert('Game content is required.', 'error');
+    setPublishingState(false);
+    return;
+  }
+  
   const publishData = {
-    title: formData.get('title'),
-    description: formData.get('description'),
-    html_content: currentGameHtml
+    title: title,
+    description: description,
+    html_content: html_content
   };
   
   try {
@@ -726,6 +772,7 @@ document.getElementById('publish-form').addEventListener('submit', async functio
     const data = await response.json();
     
     if (data.success) {
+      completePublishingProgress();
       App.showAlert('Game published successfully to the community!', 'success');
       closePublishModal();
       
@@ -734,13 +781,126 @@ document.getElementById('publish-form').addEventListener('submit', async functio
         window.location.href = '/games';
       }, 2000);
     } else {
+      completePublishingProgress();
       App.showAlert(data.error || 'Failed to publish game.', 'error');
     }
   } catch (error) {
     console.error('Publish error:', error);
+    completePublishingProgress();
     App.showAlert('Failed to publish game. Please try again.', 'error');
+  } finally {
+    setPublishingState(false);
   }
 });
+
+// Publishing State Functions
+let publishingProgressInterval = null;
+let publishingComplete = false;
+
+function setPublishingState(publishing) {
+  const publishBtn = document.getElementById('publish-submit-btn');
+  const publishText = document.getElementById('publish-text');
+  const publishProgress = document.getElementById('publish-progress');
+  const cancelBtn = document.getElementById('publish-cancel-btn');
+  const form = document.getElementById('publish-form');
+  
+  console.log('Setting publishing state:', publishing);
+  console.log('Elements found:', { publishBtn: !!publishBtn, publishText: !!publishText, publishProgress: !!publishProgress });
+  
+  if (publishing) {
+    publishText.style.display = 'none';
+    publishProgress.style.display = 'flex';
+    publishBtn.disabled = true;
+    cancelBtn.disabled = true;
+    form.querySelectorAll('input, textarea').forEach(input => input.disabled = true);
+    console.log('Publishing state set to true - progress should be visible');
+  } else {
+    publishText.style.display = 'inline';
+    publishProgress.style.display = 'none';
+    publishBtn.disabled = false;
+    cancelBtn.disabled = false;
+    form.querySelectorAll('input, textarea').forEach(input => input.disabled = false);
+    // Reset progress bar
+    const publishProgressFill = document.getElementById('publish-progress-fill');
+    if (publishProgressFill) {
+      publishProgressFill.style.width = '0%';
+    }
+    console.log('Publishing state set to false - progress should be hidden');
+  }
+}
+
+function startPublishingProgress() {
+  publishingComplete = false;
+  const publishProgressFill = document.getElementById('publish-progress-fill');
+  
+  console.log('Starting publishing progress, fill element:', !!publishProgressFill);
+  
+  if (publishProgressFill) {
+    publishProgressFill.style.width = '0%';
+    console.log('Progress fill reset to 0%');
+  }
+  
+  const totalDuration = 45000; // 45 seconds for 3 attempts with 15s max wait
+  const startTime = Date.now();
+  
+  // Clear any existing interval
+  if (publishingProgressInterval) {
+    clearInterval(publishingProgressInterval);
+  }
+  
+  publishingProgressInterval = setInterval(() => {
+    if (publishingComplete) {
+      return; // Let completePublishingProgress handle completion
+    }
+    
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min((elapsed / totalDuration) * 100, 95); // Cap at 95% until completion
+    
+    if (publishProgressFill) publishProgressFill.style.width = progress + '%';
+    
+    // If we've reached 95% and still no response, slow down the progress
+    if (progress >= 95) {
+      clearInterval(publishingProgressInterval);
+      // Start a slower interval for the final 5%
+      const slowInterval = setInterval(() => {
+        if (publishingComplete) {
+          clearInterval(slowInterval);
+          return;
+        }
+        const currentProgress = parseFloat(publishProgressFill?.style.width) || 95;
+        if (currentProgress < 99) {
+          const newProgress = currentProgress + 0.2;
+          if (publishProgressFill) publishProgressFill.style.width = newProgress + '%';
+        }
+      }, 2000); // Add 0.2% every 2 seconds
+    }
+  }, 200); // Update every 200ms for smooth animation
+}
+
+function completePublishingProgress() {
+  publishingComplete = true;
+  
+  // Clear any existing interval
+  if (publishingProgressInterval) {
+    clearInterval(publishingProgressInterval);
+    publishingProgressInterval = null;
+  }
+  
+  const publishProgressFill = document.getElementById('publish-progress-fill');
+  
+  // Quickly complete to 100%
+  const completion = setInterval(() => {
+    const currentProgress = parseInt(publishProgressFill?.style.width) || 0;
+    
+    if (currentProgress >= 100) {
+      clearInterval(completion);
+      return;
+    }
+    
+    const newProgress = Math.min(currentProgress + 20, 100);
+    if (publishProgressFill) publishProgressFill.style.width = newProgress + '%';
+  }, 50); // Very fast completion
+}
 
 // Close modal when clicking outside
 document.getElementById('publish-modal').addEventListener('click', function(e) {
@@ -748,6 +908,19 @@ document.getElementById('publish-modal').addEventListener('click', function(e) {
     closePublishModal();
   }
 });
+
+// Test function for debugging progress bar
+function testPublishingProgress() {
+  console.log('Testing publishing progress...');
+  setPublishingState(true);
+  startPublishingProgress();
+  
+  // Test progress for 3 seconds
+  setTimeout(() => {
+    console.log('Test complete, hiding progress');
+    setPublishingState(false);
+  }, 3000);
+}
 </script>
 
 <style>
@@ -1175,6 +1348,7 @@ document.getElementById('publish-modal').addEventListener('click', function(e) {
   justify-content: center;
   background: linear-gradient(180deg, #121525, #0e1120);
   overflow: hidden;
+  border-radius: 4px;
 }
 
 .btn-progress-fill {
@@ -1185,15 +1359,17 @@ document.getElementById('publish-modal').addEventListener('click', function(e) {
   width: 0%;
   background: linear-gradient(90deg, #00ff88, #00cc66);
   transition: width 0.3s ease;
-  opacity: 0.3;
+  opacity: 0.8;
+  border-radius: 4px;
 }
 
 .btn-progress-text {
   position: relative;
   z-index: 2;
-  color: var(--fg);
+  color: #ffffff;
   font-family: 'Press Start 2P', system-ui, monospace;
   font-size: 11px;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
 }
 
 /* Refine Progress Bar Styles */

@@ -113,11 +113,11 @@ class HTMLPreviewGenerator:
             # Try to wait for canvas or other dynamic content to render
             try:
                 # Wait for canvas element if it exists (for games)
-                WebDriverWait(self.driver, 5).until(
+                WebDriverWait(self.driver, 2).until(
                     EC.presence_of_element_located((By.TAG_NAME, "canvas"))
                 )
                 print("✓ Canvas element detected, waiting for rendering...")
-                time.sleep(2)  # Additional wait for canvas rendering
+                time.sleep(1)  # Reduced additional wait for canvas rendering
             except TimeoutException:
                 print("ℹ️  No canvas element found, proceeding with screenshot")
             
@@ -130,8 +130,18 @@ class HTMLPreviewGenerator:
             print(f"📸 Taking screenshot...")
             self.driver.save_screenshot(str(output_path))
             
-            print(f"✅ Screenshot saved: {output_path}")
-            return str(output_path)
+            # Verify screenshot was created and has content
+            if os.path.exists(output_path):
+                file_size = os.path.getsize(output_path)
+                if file_size > 0:
+                    print(f"✅ Screenshot saved: {output_path} (size: {file_size} bytes)")
+                    return str(output_path)
+                else:
+                    print(f"❌ Screenshot file is empty: {output_path}")
+                    return None
+            else:
+                print(f"❌ Screenshot file was not created: {output_path}")
+                return None
             
         except WebDriverException as e:
             print(f"✗ WebDriver error: {e}")

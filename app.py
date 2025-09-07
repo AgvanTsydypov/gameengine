@@ -83,42 +83,213 @@ def generate_game_thumbnail(html_content: str, game_title: str) -> str:
     Returns:
         Path to the generated thumbnail file, or None if failed
     """
+    temp_html_path = None
+    generator = None
+    
     try:
+        logger.info(f"Starting thumbnail generation for game: {game_title}")
+        
+        # Validate HTML content
+        if not html_content or len(html_content.strip()) == 0:
+            logger.error("Empty HTML content provided for thumbnail generation")
+            return None
+        
         # Create a temporary HTML file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
             temp_file.write(html_content)
             temp_html_path = temp_file.name
         
+        logger.info(f"Created temporary HTML file: {temp_html_path}")
+        
         # Generate thumbnail using HTMLPreviewGenerator
         generator = HTMLPreviewGenerator(headless=True, window_size=(800, 600))
         
-        try:
-            # Generate the thumbnail
-            thumbnail_path = generator.generate_preview(
-                html_file_path=temp_html_path,
-                wait_time=5  # Wait longer for games to load
-            )
+        # Generate the thumbnail
+        thumbnail_path = generator.generate_preview(
+            html_file_path=temp_html_path,
+            wait_time=2  # Reduced wait time for faster publishing
+        )
+        
+        if thumbnail_path and os.path.exists(thumbnail_path):
+            file_size = os.path.getsize(thumbnail_path)
+            logger.info(f"Thumbnail generated successfully: {thumbnail_path} (size: {file_size} bytes)")
             
-            if thumbnail_path and os.path.exists(thumbnail_path):
-                logger.info(f"Thumbnail generated successfully: {thumbnail_path}")
+            # Validate thumbnail file
+            if file_size > 0:
                 return thumbnail_path
             else:
-                logger.error("Failed to generate thumbnail")
+                logger.error("Generated thumbnail file is empty")
                 return None
+        else:
+            logger.error("Failed to generate thumbnail - no path returned or file doesn't exist")
+            return None
                 
-        finally:
-            generator.close()
-            
     except Exception as e:
-        logger.error(f"Error generating thumbnail: {e}")
+        logger.error(f"Error generating thumbnail for {game_title}: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return None
     finally:
+        # Clean up generator
+        if generator:
+            try:
+                generator.close()
+            except Exception as e:
+                logger.warning(f"Error closing generator: {e}")
+        
         # Clean up temporary HTML file
-        try:
-            if 'temp_html_path' in locals() and os.path.exists(temp_html_path):
+        if temp_html_path and os.path.exists(temp_html_path):
+            try:
                 os.unlink(temp_html_path)
+                logger.info(f"Cleaned up temporary HTML file: {temp_html_path}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temporary file {temp_html_path}: {e}")
+
+def generate_game_thumbnail_with_retry(html_content: str, game_title: str) -> str:
+    """
+    Generate a thumbnail with retry mechanism and longer wait times
+    
+    Args:
+        html_content: The HTML content of the game
+        game_title: The title of the game
+        
+    Returns:
+        Path to the generated thumbnail file, or None if failed
+    """
+    temp_html_path = None
+    generator = None
+    
+    try:
+        logger.info(f"Retry thumbnail generation for game: {game_title}")
+        
+        # Create a temporary HTML file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
+            temp_file.write(html_content)
+            temp_html_path = temp_file.name
+        
+        # Generate thumbnail using HTMLPreviewGenerator with longer wait time
+        generator = HTMLPreviewGenerator(headless=True, window_size=(800, 600))
+        
+        # Generate the thumbnail with longer wait time
+        thumbnail_path = generator.generate_preview(
+            html_file_path=temp_html_path,
+            wait_time=5  # Longer wait time for retry
+        )
+        
+        if thumbnail_path and os.path.exists(thumbnail_path):
+            file_size = os.path.getsize(thumbnail_path)
+            logger.info(f"Retry thumbnail generated successfully: {thumbnail_path} (size: {file_size} bytes)")
+            
+            if file_size > 0:
+                return thumbnail_path
+            else:
+                logger.error("Retry generated thumbnail file is empty")
+                return None
+        else:
+            logger.error("Retry failed to generate thumbnail")
+            return None
+                
+    except Exception as e:
+        logger.error(f"Error in retry thumbnail generation for {game_title}: {e}")
+        return None
+    finally:
+        # Clean up generator
+        if generator:
+            try:
+                generator.close()
+            except Exception as e:
+                logger.warning(f"Error closing retry generator: {e}")
+        
+        # Clean up temporary HTML file
+        if temp_html_path and os.path.exists(temp_html_path):
+            try:
+                os.unlink(temp_html_path)
+            except Exception as e:
+                logger.warning(f"Failed to clean up retry temporary file {temp_html_path}: {e}")
+
+def generate_game_thumbnail_with_multiple_attempts(html_content: str, game_title: str) -> str:
+    """
+    Generate a thumbnail with 3 attempts and increasing wait times
+    
+    Args:
+        html_content: The HTML content of the game
+        game_title: The title of the game
+        
+    Returns:
+        Path to the generated thumbnail file, or None if all attempts failed
+    """
+    wait_times = [2, 8, 15]  # Increasing wait times for each attempt
+    
+    for attempt in range(3):
+        try:
+            logger.info(f"Thumbnail generation attempt {attempt + 1}/3 for {game_title}")
+            
+            temp_html_path = None
+            generator = None
+            
+            try:
+                # Validate HTML content
+                if not html_content or len(html_content.strip()) == 0:
+                    logger.error("Empty HTML content provided for thumbnail generation")
+                    return None
+                
+                # Create a temporary HTML file
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
+                    temp_file.write(html_content)
+                    temp_html_path = temp_file.name
+                
+                logger.info(f"Created temporary HTML file: {temp_html_path}")
+                
+                # Generate thumbnail using HTMLPreviewGenerator
+                generator = HTMLPreviewGenerator(headless=True, window_size=(800, 600))
+                
+                # Generate the thumbnail with current attempt's wait time
+                thumbnail_path = generator.generate_preview(
+                    html_file_path=temp_html_path,
+                    wait_time=wait_times[attempt]
+                )
+                
+                if thumbnail_path and os.path.exists(thumbnail_path):
+                    file_size = os.path.getsize(thumbnail_path)
+                    logger.info(f"Attempt {attempt + 1} thumbnail generated successfully: {thumbnail_path} (size: {file_size} bytes)")
+                    
+                    # Validate thumbnail file
+                    if file_size > 0:
+                        return thumbnail_path
+                    else:
+                        logger.error(f"Attempt {attempt + 1} generated thumbnail file is empty")
+                else:
+                    logger.error(f"Attempt {attempt + 1} failed to generate thumbnail")
+                    
+            except Exception as e:
+                logger.error(f"Error in attempt {attempt + 1} for {game_title}: {e}")
+                
+            finally:
+                # Clean up generator
+                if generator:
+                    try:
+                        generator.close()
+                    except Exception as e:
+                        logger.warning(f"Error closing generator in attempt {attempt + 1}: {e}")
+                
+                # Clean up temporary HTML file
+                if temp_html_path and os.path.exists(temp_html_path):
+                    try:
+                        os.unlink(temp_html_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to clean up temporary file in attempt {attempt + 1}: {e}")
+            
+            # If this attempt failed and we have more attempts, wait before retrying
+            if attempt < 2:
+                logger.info(f"Waiting 2 seconds before attempt {attempt + 2}...")
+                import time
+                time.sleep(2)
+                
         except Exception as e:
-            logger.warning(f"Failed to clean up temporary file: {e}")
+            logger.error(f"Unexpected error in attempt {attempt + 1} for {game_title}: {e}")
+    
+    logger.error(f"All 3 attempts failed for thumbnail generation: {game_title}")
+    return None
 
 # Game generation system instructions
 SYSTEM_INSTRUCTIONS_ONE_CALL = """
@@ -533,8 +704,8 @@ def upload_game():
     
     try:
         # Get form data
-        title = request.form.get('title', '').strip()
-        description = request.form.get('description', '').strip()
+        title = (request.form.get('title') or '').strip()
+        description = (request.form.get('description') or '').strip()
         game_file = request.files.get('game_file')
         
         # Validate input
@@ -565,9 +736,9 @@ def upload_game():
         if not supabase_manager.is_connected():
             return jsonify({'error': 'Storage service not available'}), 500
         
-        # Generate thumbnail for the game
+        # Generate thumbnail for the game with 3 attempts
         logger.info(f"Generating thumbnail for game: {title}")
-        thumbnail_path = generate_game_thumbnail(html_content, title)
+        thumbnail_path = generate_game_thumbnail_with_multiple_attempts(html_content, title)
         
         # Save file to Supabase storage and create user_data record
         result = supabase_manager.save_user_file(
@@ -920,7 +1091,7 @@ def api_generate_game():
     
     try:
         data = request.get_json()
-        prompt = data.get('prompt', '').strip()
+        prompt = (data.get('prompt') or '').strip()
         
         if not prompt:
             return jsonify({'error': 'Game prompt is required'}), 400
@@ -949,8 +1120,8 @@ def api_refine_game():
     
     try:
         data = request.get_json()
-        instruction = data.get('instruction', '').strip()
-        current_html = data.get('current_html', '').strip()
+        instruction = (data.get('instruction') or '').strip()
+        current_html = (data.get('current_html') or '').strip()
         
         if not instruction:
             return jsonify({'error': 'Refinement instruction is required'}), 400
@@ -981,9 +1152,11 @@ def api_publish_game():
     
     try:
         data = request.get_json()
-        title = data.get('title', '').strip()
-        description = data.get('description', '').strip()
-        html_content = data.get('html_content', '').strip()
+        logger.info(f"Received publish data: {data}")
+        title = (data.get('title') or '').strip()
+        description = (data.get('description') or '').strip()
+        html_content = (data.get('html_content') or '').strip()
+        logger.info(f"Processed values - title: '{title}', description: '{description}', html_content length: {len(html_content)}")
         
         if not title:
             return jsonify({'error': 'Game title is required'}), 400
@@ -997,9 +1170,9 @@ def api_publish_game():
         if not supabase_manager.is_connected():
             return jsonify({'error': 'Storage service not available'}), 500
         
-        # Generate thumbnail for the AI-generated game
+        # Generate thumbnail for the AI-generated game with 3 attempts
         logger.info(f"Generating thumbnail for AI-generated game: {title}")
-        thumbnail_path = generate_game_thumbnail(html_content, title)
+        thumbnail_path = generate_game_thumbnail_with_multiple_attempts(html_content, title)
         
         # Create a filename based on title
         safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()

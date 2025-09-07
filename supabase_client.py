@@ -191,7 +191,7 @@ class SupabaseManager:
     
     def delete_user_data(self, data_id: str, user_id: str) -> bool:
         """
-        Удаляет данные пользователя
+        Удаляет данные пользователя и связанные файлы из storage
         
         Args:
             data_id: ID записи данных
@@ -204,7 +204,81 @@ class SupabaseManager:
             return False
         
         try:
-            # Use service role key for server-side operations to bypass RLS
+            # First, get the data record to extract file paths before deleting
+            game_data = None
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('user_data').select('*').eq('id', data_id).eq('user_id', user_id).execute()
+                if response.data:
+                    game_data = response.data[0]
+            else:
+                response = self.client.table('user_data').select('*').eq('id', data_id).eq('user_id', user_id).execute()
+                if response.data:
+                    game_data = response.data[0]
+            
+            if not game_data:
+                logger.warning(f"Game data {data_id} not found for user {user_id}")
+                return False
+            
+            # Extract file paths from the data
+            data_content = game_data.get('data_content')  # This contains the main file URL
+            thumbnail_url = game_data.get('thumbnail_url')
+            
+            logger.info(f"Game data URLs - data_content: {data_content}")
+            logger.info(f"Game data URLs - thumbnail_url: {thumbnail_url}")
+            
+            # Delete files from storage if they exist
+            files_deleted = []
+            
+            # Delete main game file
+            if data_content and 'game-files/' in data_content:
+                try:
+                    # Extract file path from data_content URL
+                    # URL format: https://xxx.supabase.co/storage/v1/object/public/game-files/games/user_id/file_id.html
+                    if 'games/' in data_content:
+                        file_path = data_content.split('games/')[1]
+                        # Remove query parameters if present
+                        file_path = file_path.split('?')[0]
+                        if self.delete_file_from_storage('game-files', f"games/{file_path}"):
+                            files_deleted.append(f"Main file: games/{file_path}")
+                            logger.info(f"Deleted main game file: games/{file_path}")
+                        else:
+                            logger.warning(f"Failed to delete main game file: games/{file_path}")
+                except Exception as e:
+                    logger.error(f"Error deleting main game file: {e}")
+            
+            # Delete thumbnail file
+            if thumbnail_url and 'game-files/' in thumbnail_url:
+                try:
+                    # Extract file path from thumbnail URL
+                    # URL format: https://xxx.supabase.co/storage/v1/object/public/game-files/thumbnails/user_id/thumbnail_id.png
+                    if 'thumbnails/' in thumbnail_url:
+                        thumbnail_path = thumbnail_url.split('thumbnails/')[1]
+                        # Remove query parameters if present
+                        thumbnail_path = thumbnail_path.split('?')[0]
+                        if self.delete_file_from_storage('game-files', f"thumbnails/{thumbnail_path}"):
+                            files_deleted.append(f"Thumbnail: thumbnails/{thumbnail_path}")
+                            logger.info(f"Deleted thumbnail file: thumbnails/{thumbnail_path}")
+                        else:
+                            logger.warning(f"Failed to delete thumbnail file: thumbnails/{thumbnail_path}")
+                except Exception as e:
+                    logger.error(f"Error deleting thumbnail file: {e}")
+            
+            # Delete related likes for this game
+            try:
+                if self.service_role_key:
+                    from supabase import create_client
+                    service_client = create_client(self.url, self.service_role_key)
+                    likes_response = service_client.table('game_likes').delete().eq('game_id', data_id).execute()
+                else:
+                    likes_response = self.client.table('game_likes').delete().eq('game_id', data_id).execute()
+                
+                logger.info(f"Deleted likes for game {data_id}")
+            except Exception as e:
+                logger.warning(f"Failed to delete likes for game {data_id}: {e}")
+            
+            # Now delete the database record
             if self.service_role_key:
                 from supabase import create_client
                 service_client = create_client(self.url, self.service_role_key)
@@ -212,10 +286,13 @@ class SupabaseManager:
             else:
                 response = self.client.table('user_data').delete().eq('id', data_id).eq('user_id', user_id).execute()
             
-            logger.info(f"Данные {data_id} пользователя {user_id} успешно удалены")
+            logger.info(f"Game data {data_id} for user {user_id} successfully deleted from database")
+            if files_deleted:
+                logger.info(f"Files deleted from storage: {', '.join(files_deleted)}")
+            
             return True
         except Exception as e:
-            logger.error(f"Ошибка при удалении данных пользователя: {e}")
+            logger.error(f"Error deleting user data: {e}")
             return False
     
     def update_user_data(self, data_id: str, user_id: str, data_content: str, filename: str = None) -> Optional[Dict[str, Any]]:
@@ -306,7 +383,14 @@ class SupabaseManager:
             return False
         
         try:
-            response = self.client.storage.from_(bucket_name).remove([file_path])
+            # Use service role key for server-side operations to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.storage.from_(bucket_name).remove([file_path])
+            else:
+                response = self.client.storage.from_(bucket_name).remove([file_path])
+            
             logger.info(f"Файл {file_path} успешно удален из bucket {bucket_name}")
             return True
             
@@ -356,38 +440,47 @@ class SupabaseManager:
             thumbnail_url = None
             if thumbnail_path and os.path.exists(thumbnail_path):
                 try:
-                    # Create thumbnail path in storage
-                    thumbnail_id = str(uuid.uuid4())
-                    thumbnail_storage_path = f"thumbnails/{user_id}/{thumbnail_id}.png"
-                    
-                    logger.info(f"Attempting to upload thumbnail: {thumbnail_path}")
-                    logger.info(f"Thumbnail size: {os.path.getsize(thumbnail_path)} bytes")
-                    logger.info(f"Storage path: {thumbnail_storage_path}")
-                    
-                    # Read thumbnail file
-                    with open(thumbnail_path, 'rb') as thumb_file:
-                        thumbnail_content = thumb_file.read()
-                    
-                    logger.info(f"Read thumbnail content: {len(thumbnail_content)} bytes")
-                    
-                    # Upload thumbnail to storage (without content type to avoid MIME type restrictions)
-                    thumbnail_url = self.upload_file_to_storage_with_service_role(
-                        bucket_name="game-files",
-                        file_path=thumbnail_storage_path,
-                        file_content=thumbnail_content,
-                        content_type=None  # Remove content type to avoid MIME type restrictions
-                    )
-                    
-                    if thumbnail_url:
-                        logger.info(f"Thumbnail uploaded successfully: {thumbnail_url}")
+                    # Validate thumbnail file
+                    file_size = os.path.getsize(thumbnail_path)
+                    if file_size == 0:
+                        logger.error(f"Thumbnail file is empty: {thumbnail_path}")
                     else:
-                        logger.warning("Failed to upload thumbnail, continuing without it")
+                        # Create thumbnail path in storage
+                        thumbnail_id = str(uuid.uuid4())
+                        thumbnail_storage_path = f"thumbnails/{user_id}/{thumbnail_id}.png"
                         
+                        logger.info(f"Attempting to upload thumbnail: {thumbnail_path}")
+                        logger.info(f"Thumbnail size: {file_size} bytes")
+                        logger.info(f"Storage path: {thumbnail_storage_path}")
+                        
+                        # Read thumbnail file
+                        with open(thumbnail_path, 'rb') as thumb_file:
+                            thumbnail_content = thumb_file.read()
+                        
+                        logger.info(f"Read thumbnail content: {len(thumbnail_content)} bytes")
+                        
+                        # Upload thumbnail to storage (without content type to avoid MIME type restrictions)
+                        thumbnail_url = self.upload_file_to_storage_with_service_role(
+                            bucket_name="game-files",
+                            file_path=thumbnail_storage_path,
+                            file_content=thumbnail_content,
+                            content_type=None  # Remove content type to avoid MIME type restrictions
+                        )
+                        
+                        if thumbnail_url:
+                            logger.info(f"Thumbnail uploaded successfully: {thumbnail_url}")
+                        else:
+                            logger.warning("Failed to upload thumbnail, continuing without it")
                 except Exception as e:
                     logger.error(f"Error uploading thumbnail: {e}")
                     import traceback
                     logger.error(f"Full traceback: {traceback.format_exc()}")
                     # Continue without thumbnail
+            else:
+                if thumbnail_path:
+                    logger.warning(f"Thumbnail file does not exist: {thumbnail_path}")
+                else:
+                    logger.info("No thumbnail path provided")
             
             # Сохраняем информацию о файле в user_data
             result = self.save_user_data(
