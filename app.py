@@ -295,30 +295,38 @@ def generate_game_thumbnail_with_multiple_attempts(html_content: str, game_title
 # Game generation system instructions
 SYSTEM_INSTRUCTIONS_ONE_CALL = """
 You are a senior front-end engineer and compact game designer.
-From a free-form idea, produce:
-- a SINGLE-FILE HTML game (inline CSS + vanilla JS only).
+You will receive a free-form idea and must produce a SINGLE-FILE browser game.
 
-HARD CONSTRAINTS
-- One HTML file only (no external assets, no web requests, no CDNs, no fonts).
-- Mobile-first, accessible (focus-visible, high contrast, large tap target, respects prefers-reduced-motion).
-- Must run offline in a modern browser (Chrome/Safari/Firefox).
-- No console errors; concise JS; include a tiny inline help/about section.
-- If you use persistence, use localStorage safely and offer a Reset.
+OUTPUT REQUIREMENTS
+- Output ONLY valid JSON (no markdown, no comments, no extra text).
+- JSON shape (strict):
+  {
+    "title": string,
+    "html": string  // full self-contained <!doctype html> ... </html>
+  }
 
-RETURN ONLY strict JSON (no markdown) of shape:
-{
-  "title": str,
-  "html": "<!doctype html>... full self-contained document ..."
-}
+GAME CONSTRAINTS
+- One single HTML file with inline CSS + vanilla JS only.
+- No external assets, no web requests, no CDNs, no fonts, no external dependencies.
+- Mobile-first and accessible:
+  - Respect prefers-reduced-motion
+  - Provide high contrast colors
+  - Ensure large tap targets
+  - Ensure focus-visible states
+- Must run offline in modern browsers (Chrome/Safari/Firefox).
+- No console errors; concise, clean JS.
+- If persistence is used, only use localStorage (safe keying) and provide a visible Reset option.
+
+You are not allowed to output anything else besides the strict JSON.
 """
 
 def build_user_message(user_prompt: str) -> str:
     """Build user message for game generation"""
     return (
         "Create a complete, playable browser game from this idea. "
-        "Choose the most fitting genre/mechanics based on the prompt. "
-        "Keep it self-contained (inline CSS/JS) and accessible. "
-        "Return STRICT JSON as per schema.\n\n"
+        "Pick the most fitting genre/mechanics based on the idea. "
+        "The game must follow all SYSTEM constraints above. "
+        "Return ONLY strict JSON in the required schema.\n\n"
         f"USER_IDEA:\n{user_prompt}"
     )
 
@@ -393,16 +401,20 @@ def refine_game_with_ai(instruction: str, current_html: str, model_id: str = "gp
         logger.info(f"Refining game with {model_config['name']} and instruction: {instruction[:100]}...")
         
         SYSTEM = (
-            "You are a senior front-end engineer. "
-            "You will receive an existing FULL, self-contained HTML game. "
-            "Apply the user's instructions and RETURN ONLY a full, valid HTML document "
-            "(<html>...</html>) with inline CSS + vanilla JS; no external resources; "
-            "no markdown, no JSON, no commentary."
+            "You are a highly skilled senior front-end engineer. "
+            "You will be given a complete, self-contained HTML game (with inline CSS and vanilla JS). "
+            "Your task is to modify and refine this game according to the user's instructions. "
+            "Important rules:\n"
+            "1. Output ONLY a single, complete, valid HTML document wrapped in <html>...</html>.\n"
+            "2. Use ONLY inline CSS and vanilla JS (no external libraries, no CDN links).\n"
+            "3. Do NOT include markdown, JSON, comments, explanations, or extra text outside the HTML.\n"
+            "4. Ensure the final game remains playable and consistent with the instructions.\n"
         )
+
         USER = (
-            "USER_INSTRUCTIONS:\n"
+            "USER INSTRUCTIONS:\n"
             f"{instruction}\n\n"
-            "CURRENT_GAME_HTML:\n"
+            "CURRENT GAME HTML:\n"
             f"{current_html}"
         )
 
