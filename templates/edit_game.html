@@ -88,6 +88,20 @@
               ></textarea>
             </div>
 
+            <div class="form-group">
+              <label class="form-label" for="refinement-model-select">AI MODEL</label>
+              <select class="form-input" id="refinement-model-select" name="refinement_model">
+                <option value="QP">Quick Prototype</option>
+                <option value="PG">Polished Game</option>
+                <option value="PE">Premium Experience</option>
+              </select>
+              <div class="model-description" style="font-size: 9px; color: var(--muted); margin-top: 4px; line-height: 1.4;">
+                <div id="refinement-model-desc-QP" style="display: none;">For testing game ideas, fast drafts.</div>
+                <div id="refinement-model-desc-PG" style="display: none;">Better balance, assets, replay value.</div>
+                <div id="refinement-model-desc-PE" style="display: none;">Top-tier AI creativity, ready-to-share games.</div>
+              </div>
+            </div>
+
             <div class="form-actions">
               <button id="refine-btn" class="btn btn-ghost" onclick="refineGame()">
                 <span id="refine-text">🔧 REFINE GAME</span>
@@ -172,6 +186,26 @@ document.addEventListener('DOMContentLoaded', function() {
     refineBtn.disabled = this.value.trim().length === 0;
   });
   
+  // Model selection description handler
+  const refinementModelSelect = document.getElementById('refinement-model-select');
+  refinementModelSelect.addEventListener('change', function() {
+    // Hide all descriptions
+    document.querySelectorAll('[id^="refinement-model-desc-"]').forEach(desc => {
+      desc.style.display = 'none';
+    });
+    
+    // Show selected model description
+    const selectedModel = this.value;
+    const descId = `refinement-model-desc-${selectedModel}`;
+    const descElement = document.getElementById(descId);
+    if (descElement) {
+      descElement.style.display = 'block';
+    }
+  });
+  
+  // Initialize with first model description
+  refinementModelSelect.dispatchEvent(new Event('change'));
+  
   // Initialize button state
   refineBtn.disabled = true;
 });
@@ -197,6 +231,8 @@ async function refineGame() {
   if (isRefining || !currentGameHtml) return;
   
   const prompt = document.getElementById('refinement-prompt').value.trim();
+  const model = document.getElementById('refinement-model-select').value;
+  
   if (!prompt) {
     App.showAlert('Please enter refinement instructions.', 'error');
     return;
@@ -214,7 +250,8 @@ async function refineGame() {
       },
       body: JSON.stringify({ 
         instruction: prompt,
-        current_html: currentGameHtml 
+        current_html: currentGameHtml,
+        model: model
       })
     });
     
