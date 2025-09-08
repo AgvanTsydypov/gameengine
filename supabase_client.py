@@ -665,6 +665,44 @@ class SupabaseManager:
             
             if result.data and len(result.data) > 0:
                 logger.info(f"Файл {data_id} пользователя {user_id} успешно обновлен")
+                
+                # Clean up old files from storage after successful database update
+                # This ensures we only delete old files if the new ones were successfully uploaded and DB updated
+                old_file_url = current_data.get('data_content')
+                old_thumbnail_url = current_data.get('thumbnail_url')
+                
+                # Delete old main game file
+                if old_file_url and 'game-files/' in old_file_url:
+                    try:
+                        # Extract file path from old file URL
+                        # URL format: https://xxx.supabase.co/storage/v1/object/public/game-files/games/user_id/file_id.html
+                        if 'games/' in old_file_url:
+                            old_file_path = old_file_url.split('games/')[1]
+                            # Remove query parameters if present
+                            old_file_path = old_file_path.split('?')[0]
+                            if self.delete_file_from_storage('game-files', f"games/{old_file_path}"):
+                                logger.info(f"Deleted old game file: games/{old_file_path}")
+                            else:
+                                logger.warning(f"Failed to delete old game file: games/{old_file_path}")
+                    except Exception as e:
+                        logger.error(f"Error deleting old game file: {e}")
+                
+                # Delete old thumbnail file (only if we uploaded a new one)
+                if thumbnail_storage_path and old_thumbnail_url and 'game-files/' in old_thumbnail_url:
+                    try:
+                        # Extract file path from old thumbnail URL
+                        # URL format: https://xxx.supabase.co/storage/v1/object/public/game-files/thumbnails/user_id/thumbnail_id.png
+                        if 'thumbnails/' in old_thumbnail_url:
+                            old_thumbnail_path = old_thumbnail_url.split('thumbnails/')[1]
+                            # Remove query parameters if present
+                            old_thumbnail_path = old_thumbnail_path.split('?')[0]
+                            if self.delete_file_from_storage('game-files', f"thumbnails/{old_thumbnail_path}"):
+                                logger.info(f"Deleted old thumbnail file: thumbnails/{old_thumbnail_path}")
+                            else:
+                                logger.warning(f"Failed to delete old thumbnail file: thumbnails/{old_thumbnail_path}")
+                    except Exception as e:
+                        logger.error(f"Error deleting old thumbnail file: {e}")
+                
                 return result.data[0]
             else:
                 logger.error(f"Не удалось обновить запись {data_id} - no data returned")
