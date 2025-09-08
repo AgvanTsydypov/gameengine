@@ -124,6 +124,20 @@
             ></textarea>
           </div>
 
+          <div class="form-group">
+            <label class="form-label" for="model-select">AI MODEL</label>
+            <select class="form-input" id="model-select" name="model">
+              <option value="QP">Quick Prototype</option>
+              <option value="PG">Polished Game</option>
+              <option value="PE">Premium Experience</option>
+            </select>
+            <div class="model-description" style="font-size: 9px; color: var(--muted); margin-top: 4px; line-height: 1.4;">
+              <div id="model-desc-QP" style="display: none;">For testing game ideas, fast drafts.</div>
+              <div id="model-desc-PG" style="display: none;">Better balance, assets, replay value.</div>
+              <div id="model-desc-PE" style="display: none;">Top-tier AI creativity, ready-to-share games.</div>
+            </div>
+          </div>
+
           <div class="form-actions">
             <button id="generate-btn" class="btn btn-cta" onclick="generateGame()">
               <span id="generate-text">✨ GENERATE GAME</span>
@@ -233,6 +247,28 @@ document.addEventListener('DOMContentLoaded', function() {
     generateBtn.disabled = this.value.trim().length === 0;
   });
   
+  // Model mapping is handled server-side for security
+  
+  // Model selection description handler
+  const modelSelect = document.getElementById('model-select');
+  modelSelect.addEventListener('change', function() {
+    // Hide all descriptions
+    document.querySelectorAll('[id^="model-desc-"]').forEach(desc => {
+      desc.style.display = 'none';
+    });
+    
+    // Show selected model description
+    const selectedModel = this.value;
+    const descId = `model-desc-${selectedModel}`;
+    const descElement = document.getElementById(descId);
+    if (descElement) {
+      descElement.style.display = 'block';
+    }
+  });
+  
+  // Initialize with first model description
+  modelSelect.dispatchEvent(new Event('change'));
+  
   // Initialize button state
   generateBtn.disabled = true;
 });
@@ -241,6 +277,8 @@ async function generateGame() {
   if (isGenerating) return;
   
   const prompt = document.getElementById('game-prompt').value.trim();
+  const model = document.getElementById('model-select').value;
+  
   if (!prompt) {
     App.showAlert('Please enter a game idea first.', 'error');
     return;
@@ -258,7 +296,7 @@ async function generateGame() {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt: prompt })
+      body: JSON.stringify({ prompt: prompt, model: model })
     });
     
     const data = await response.json();
@@ -305,6 +343,8 @@ async function refineGame() {
   if (isGenerating || !currentGameHtml) return;
   
   const prompt = document.getElementById('game-prompt').value.trim();
+  const model = document.getElementById('model-select').value;
+  
   if (!prompt) {
     App.showAlert('Please enter refinement instructions.', 'error');
     return;
@@ -322,7 +362,8 @@ async function refineGame() {
       },
       body: JSON.stringify({ 
         instruction: prompt,
-        current_html: currentGameHtml 
+        current_html: currentGameHtml,
+        model: model
       })
     });
     

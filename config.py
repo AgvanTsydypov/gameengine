@@ -29,6 +29,9 @@ class Config:
     # OpenAI настройки
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
     
+    # DeepSeek настройки
+    DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
+    
     # Настройки безопасности
     BCRYPT_LOG_ROUNDS = int(os.getenv('BCRYPT_LOG_ROUNDS', 12))
     SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False').lower() == 'true'

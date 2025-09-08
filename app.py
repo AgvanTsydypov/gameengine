@@ -4,11 +4,15 @@ import os
 import logging
 import json
 import tempfile
+from dotenv import load_dotenv
 from config import config
 from supabase_client import supabase_manager
 from stripe_client import stripe_manager
 from html_preview_generator import HTMLPreviewGenerator
 import openai
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -29,9 +33,140 @@ else:
     logger.warning("⚠️  OpenAI API key not found. Game generation will not work.")
     client = None
 
+# DeepSeek configuration
+deepseek_api_key = app.config.get('DEEPSEEK_API_KEY')
+if deepseek_api_key:
+    deepseek_client = openai.OpenAI(api_key=deepseek_api_key, base_url="https://api.deepseek.com")
+else:
+    logger.warning("⚠️  DeepSeek API key not found. DeepSeek model will not work.")
+    deepseek_client = None
+
+# Available AI models configuration
+AVAILABLE_MODELS = {
+    "gpt-5": {
+        "name": "GPT-5",
+        "api_url": "https://api.openai.com/v1/chat/completions",
+        "supports_json_mode": True
+    },
+    "deepseek-chat": {
+        "name": "DeepSeek Chat",
+        "api_url": "https://api.deepseek.com/v1/chat/completions",
+        "supports_json_mode": True
+    },
+    "gpt-5-mini": {
+        "name": "GPT-5 Mini",
+        "api_url": "https://api.openai.com/v1/chat/completions",
+        "supports_json_mode": True
+    }
+}
+
 def get_default_model():
     """Get the default OpenAI model"""
     return "gpt-5"
+
+def get_model_config(model_id):
+    """Get configuration for a specific model"""
+    return AVAILABLE_MODELS.get(model_id, AVAILABLE_MODELS["gpt-5"])
+
+def map_obfuscated_model(obfuscated_model):
+    """Map obfuscated model values to actual model names"""
+    model_mapping = {
+        'QP': 'deepseek-chat',
+        'PG': 'gpt-5-mini',
+        'PE': 'gpt-5'
+    }
+    return model_mapping.get(obfuscated_model, 'gpt-5')
+
+def generate_game_with_deepseek(user_prompt: str):
+    """Generate a game using DeepSeek API"""
+    if not deepseek_client:
+        logger.error("DeepSeek client not initialized. Please check DEEPSEEK_API_KEY.")
+        return None
+        
+    try:
+        logger.info(f"Generating game with DeepSeek and prompt: {user_prompt[:100]}...")
+        
+        response = deepseek_client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": SYSTEM_INSTRUCTIONS_ONE_CALL},
+                {"role": "user", "content": build_user_message(user_prompt)},
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"},
+            stream=False
+        )
+        
+        content = response.choices[0].message.content.strip()
+        logger.info(f"DeepSeek response received, length: {len(content)}")
+        
+        # Parse JSON response
+        try:
+            game_data = json.loads(content)
+            if "title" in game_data and "html" in game_data:
+                # Fix encoding issues in the generated HTML content
+                game_data["html"] = fix_text_encoding(game_data["html"])
+                game_data["title"] = fix_text_encoding(game_data["title"])
+                return game_data
+            else:
+                logger.error("Invalid game data structure from DeepSeek")
+                return None
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON from DeepSeek response: {e}")
+            logger.error(f"Response content: {content[:500]}...")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error generating game with DeepSeek: {e}")
+        return None
+
+def refine_game_with_deepseek(instruction: str, current_html: str):
+    """Refine existing game using DeepSeek API"""
+    if not deepseek_client:
+        logger.error("DeepSeek client not initialized. Please check DEEPSEEK_API_KEY.")
+        return None
+        
+    SYSTEM = (
+        "You are a senior front-end engineer. "
+        "You will receive an existing FULL, self-contained HTML game. "
+        "Apply the user's instructions and RETURN ONLY a full, valid HTML document "
+        "(<html>...</html>) with inline CSS + vanilla JS; no external resources; "
+        "no markdown, no JSON, no commentary."
+    )
+    USER = (
+        "USER_INSTRUCTIONS:\n"
+        f"{instruction}\n\n"
+        "CURRENT_GAME_HTML:\n"
+        f"{current_html}"
+    )
+    
+    try:
+        logger.info(f"Refining game with DeepSeek and instruction: {instruction[:100]}...")
+        
+        response = deepseek_client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": USER},
+            ],
+            temperature=0.1,
+            stream=False
+        )
+        
+        new_html = response.choices[0].message.content.strip()
+        logger.info(f"DeepSeek refinement completed, HTML length: {len(new_html)}")
+        
+        if new_html and (new_html.startswith("<!") or new_html.startswith("<html")):
+            # Fix encoding issues in the refined HTML content
+            new_html = fix_text_encoding(new_html)
+            return new_html
+        else:
+            logger.error("Invalid HTML returned from DeepSeek refinement")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error refining game with DeepSeek: {e}")
+        return None
 
 def fix_text_encoding(text):
     """Fix common text encoding issues in HTML content"""
@@ -187,22 +322,36 @@ def build_user_message(user_prompt: str) -> str:
         f"USER_IDEA:\n{user_prompt}"
     )
 
-def generate_game_with_ai(user_prompt: str):
-    """Generate a game using OpenAI API"""
+def generate_game_with_ai(user_prompt: str, model_id: str = "gpt-5"):
+    """Generate a game using AI API"""
+    model_config = get_model_config(model_id)
+    
+    # For DeepSeek, we need to use a different approach
+    if model_id == "deepseek-chat":
+        return generate_game_with_deepseek(user_prompt)
+    
+    # For OpenAI models, use the existing client
     if not client:
         logger.error("OpenAI client not initialized. Please check OPENAI_API_KEY.")
         return None
         
     try:
-        logger.info(f"Generating game with prompt: {user_prompt[:100]}...")
+        logger.info(f"Generating game with {model_config['name']} and prompt: {user_prompt[:100]}...")
         
-        response = client.chat.completions.create(
-            model=get_default_model(),
-            messages=[
+        # Prepare the request data
+        data = {
+            "model": model_id,
+            "messages": [
                 {"role": "system", "content": SYSTEM_INSTRUCTIONS_ONE_CALL},
                 {"role": "user", "content": build_user_message(user_prompt)},
             ]
-        )
+        }
+        
+        # Add JSON mode if supported
+        if model_config.get("supports_json_mode", False):
+            data["response_format"] = {"type": "json_object"}
+        
+        response = client.chat.completions.create(**data)
         
         content = response.choices[0].message.content.strip()
         logger.info(f"OpenAI response received, length: {len(content)}")
@@ -227,14 +376,21 @@ def generate_game_with_ai(user_prompt: str):
         logger.error(f"Error generating game with AI: {e}")
         return None
 
-def refine_game_with_ai(instruction: str, current_html: str):
-    """Refine existing game using OpenAI API"""
+def refine_game_with_ai(instruction: str, current_html: str, model_id: str = "gpt-5"):
+    """Refine existing game using AI API"""
+    model_config = get_model_config(model_id)
+    
+    # For DeepSeek, we need to use a different approach
+    if model_id == "deepseek-chat":
+        return refine_game_with_deepseek(instruction, current_html)
+    
+    # For OpenAI models, use the existing client
     if not client:
         logger.error("OpenAI client not initialized. Please check OPENAI_API_KEY.")
         return None
         
     try:
-        logger.info(f"Refining game with instruction: {instruction[:100]}...")
+        logger.info(f"Refining game with {model_config['name']} and instruction: {instruction[:100]}...")
         
         SYSTEM = (
             "You are a senior front-end engineer. "
@@ -250,13 +406,21 @@ def refine_game_with_ai(instruction: str, current_html: str):
             f"{current_html}"
         )
 
-        response = client.chat.completions.create(
-            model=get_default_model(),
-            messages=[
+        # Prepare the request data
+        data = {
+            "model": model_id,
+            "messages": [
                 {"role": "system", "content": SYSTEM},
                 {"role": "user", "content": USER},
             ]
-        )
+        }
+        
+        # Add JSON mode if supported (though for refinement we don't need it)
+        if model_config.get("supports_json_mode", False) and model_id != "deepseek-chat":
+            # For refinement, we don't use JSON mode as we want HTML output
+            pass
+
+        response = client.chat.completions.create(**data)
         
         new_html = (response.choices[0].message.content or "").strip()
         logger.info(f"Game refinement completed, HTML length: {len(new_html)}")
@@ -890,12 +1054,14 @@ def api_generate_game():
     try:
         data = request.get_json()
         prompt = (data.get('prompt') or '').strip()
+        obfuscated_model = data.get('model', 'PE')  # Default to PE (gpt-5) if not specified
+        model = map_obfuscated_model(obfuscated_model)  # Convert to actual model name
         
         if not prompt:
             return jsonify({'error': 'Game prompt is required'}), 400
         
         # Generate game with AI
-        game_data = generate_game_with_ai(prompt)
+        game_data = generate_game_with_ai(prompt, model)
         
         if game_data:
             return jsonify({
@@ -920,6 +1086,8 @@ def api_refine_game():
         data = request.get_json()
         instruction = (data.get('instruction') or '').strip()
         current_html = (data.get('current_html') or '').strip()
+        obfuscated_model = data.get('model', 'PE')  # Default to PE (gpt-5) if not specified
+        model = map_obfuscated_model(obfuscated_model)  # Convert to actual model name
         
         if not instruction:
             return jsonify({'error': 'Refinement instruction is required'}), 400
@@ -928,7 +1096,7 @@ def api_refine_game():
             return jsonify({'error': 'Current game HTML is required'}), 400
         
         # Refine game with AI
-        refined_html = refine_game_with_ai(instruction, current_html)
+        refined_html = refine_game_with_ai(instruction, current_html, model)
         
         if refined_html:
             return jsonify({
