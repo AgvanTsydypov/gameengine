@@ -3,6 +3,7 @@ Supabase Client Module
 """
 import os
 import uuid
+from datetime import datetime
 from supabase import create_client, Client
 from typing import Optional, Dict, Any, List
 import logging
@@ -133,6 +134,34 @@ class SupabaseManager:
         except Exception as e:
             logger.error(f"Ошибка при получении данных пользователя: {e}")
             return []
+    
+    def get_user_data_by_id(self, data_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Получает конкретную запись данных пользователя по ID
+        
+        Args:
+            data_id: ID записи
+            user_id: ID пользователя
+            
+        Returns:
+            Словарь с данными записи или None если не найдена
+        """
+        if not self.is_connected():
+            return None
+        
+        try:
+            # Use service role key for server-side operations to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('user_data').select('*').eq('id', data_id).eq('user_id', user_id).eq('data_type', 'html_game').execute()
+            else:
+                response = self.client.table('user_data').select('*').eq('id', data_id).eq('user_id', user_id).eq('data_type', 'html_game').execute()
+            
+            return response.data[0] if response.data else None
+        except Exception as e:
+            logger.error(f"Ошибка при получении записи пользователя по ID: {e}")
+            return None
     
     def get_all_uploaded_games(self) -> List[Dict[str, Any]]:
         """
@@ -436,6 +465,9 @@ class SupabaseManager:
                 logger.error("Не удалось загрузить файл в storage")
                 return None
             
+            # Track uploaded files for cleanup in case of failure
+            uploaded_files = [storage_path]
+            
             # Upload thumbnail if provided
             thumbnail_url = None
             if thumbnail_path and os.path.exists(thumbnail_path):
@@ -469,6 +501,7 @@ class SupabaseManager:
                         
                         if thumbnail_url:
                             logger.info(f"Thumbnail uploaded successfully: {thumbnail_url}")
+                            uploaded_files.append(thumbnail_storage_path)
                         else:
                             logger.warning("Failed to upload thumbnail, continuing without it")
                 except Exception as e:
@@ -501,6 +534,153 @@ class SupabaseManager:
             
         except Exception as e:
             logger.error(f"Ошибка при сохранении файла пользователя: {e}")
+            # Clean up uploaded files in case of failure
+            if 'uploaded_files' in locals():
+                for file_path in uploaded_files:
+                    try:
+                        self.delete_file_from_storage("game-files", file_path)
+                        logger.info(f"Cleaned up failed upload: {file_path}")
+                    except Exception as cleanup_error:
+                        logger.warning(f"Failed to clean up file {file_path}: {cleanup_error}")
+            return None
+        finally:
+            # Clean up thumbnail file if it was created locally
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                try:
+                    os.unlink(thumbnail_path)
+                    logger.info(f"Cleaned up temporary thumbnail file: {thumbnail_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up thumbnail file: {e}")
+    
+    def update_user_file(self, data_id: str, user_id: str, file_content: bytes, title: str = None, description: str = None, thumbnail_path: str = None) -> Optional[Dict[str, Any]]:
+        """
+        Обновляет существующий файл пользователя в storage и обновляет запись в user_data
+        
+        Args:
+            data_id: ID записи в user_data
+            user_id: ID пользователя
+            file_content: Новое содержимое файла в байтах
+            title: Новый заголовок игры
+            description: Новое описание игры
+            thumbnail_path: Путь к новому файлу превью
+            
+        Returns:
+            Словарь с данными обновленного файла или None при ошибке
+        """
+        if not self.is_connected():
+            return None
+        
+        try:
+            # Получаем текущую запись
+            current_data = self.get_user_data_by_id(data_id, user_id)
+            if not current_data:
+                logger.error(f"Record {data_id} not found for user {user_id}")
+                return None
+            
+            # Создаем новый уникальный путь для файла
+            import uuid
+            file_id = str(uuid.uuid4())
+            filename = current_data.get('filename', 'game.html')
+            file_extension = filename.split('.')[-1] if '.' in filename else 'html'
+            storage_path = f"games/{user_id}/{file_id}.{file_extension}"
+            
+            # Загружаем новый файл в storage
+            file_url = self.upload_file_to_storage_with_service_role(
+                bucket_name="game-files",
+                file_path=storage_path,
+                file_content=file_content,
+                content_type='text/html'
+            )
+            
+            if not file_url:
+                logger.error("Не удалось загрузить обновленный файл в storage")
+                return None
+            
+            # Track uploaded files for cleanup in case of failure
+            uploaded_files = [storage_path]
+            
+            # Upload new thumbnail if provided
+            thumbnail_url = current_data.get('thumbnail_url')  # Keep existing thumbnail by default
+            thumbnail_storage_path = None
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                try:
+                    # Validate thumbnail file
+                    file_size = os.path.getsize(thumbnail_path)
+                    if file_size == 0:
+                        logger.error(f"Thumbnail file is empty: {thumbnail_path}")
+                    else:
+                        # Create new thumbnail path in storage
+                        thumbnail_id = str(uuid.uuid4())
+                        thumbnail_storage_path = f"thumbnails/{user_id}/{thumbnail_id}.png"
+                        
+                        logger.info(f"Attempting to upload new thumbnail: {thumbnail_path}")
+                        logger.info(f"Thumbnail size: {file_size} bytes")
+                        logger.info(f"Storage path: {thumbnail_storage_path}")
+                        
+                        # Read thumbnail file
+                        with open(thumbnail_path, 'rb') as thumb_file:
+                            thumbnail_content = thumb_file.read()
+                        
+                        logger.info(f"Read thumbnail content: {len(thumbnail_content)} bytes")
+                        
+                        # Upload new thumbnail to storage
+                        thumbnail_url = self.upload_file_to_storage_with_service_role(
+                            bucket_name="game-files",
+                            file_path=thumbnail_storage_path,
+                            file_content=thumbnail_content,
+                            content_type=None
+                        )
+                        
+                        if thumbnail_url:
+                            logger.info(f"New thumbnail uploaded successfully: {thumbnail_url}")
+                            uploaded_files.append(thumbnail_storage_path)
+                        else:
+                            logger.warning("Failed to upload new thumbnail, keeping existing one")
+                            thumbnail_url = current_data.get('thumbnail_url')
+                except Exception as e:
+                    logger.error(f"Error uploading new thumbnail: {e}")
+                    # Keep existing thumbnail
+                    thumbnail_url = current_data.get('thumbnail_url')
+            
+            # Обновляем запись в user_data
+            update_data = {
+                'data_content': file_url,
+                'updated_at': datetime.now().isoformat()
+            }
+            
+            if title is not None:
+                update_data['title'] = title
+            if description is not None:
+                update_data['description'] = description
+            if thumbnail_url is not None:
+                update_data['thumbnail_url'] = thumbnail_url
+            
+            # Use service role key for server-side operations to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                result = service_client.table('user_data').update(update_data).eq('id', data_id).eq('user_id', user_id).eq('data_type', 'html_game').execute()
+            else:
+                result = self.client.table('user_data').update(update_data).eq('id', data_id).eq('user_id', user_id).eq('data_type', 'html_game').execute()
+            
+            if result.data and len(result.data) > 0:
+                logger.info(f"Файл {data_id} пользователя {user_id} успешно обновлен")
+                return result.data[0]
+            else:
+                logger.error(f"Не удалось обновить запись {data_id} - no data returned")
+                logger.error(f"Update result: {result}")
+                return None
+            
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении файла пользователя: {e}")
+            # Clean up uploaded files in case of failure
+            if 'uploaded_files' in locals():
+                for file_path in uploaded_files:
+                    try:
+                        self.delete_file_from_storage("game-files", file_path)
+                        logger.info(f"Cleaned up failed upload: {file_path}")
+                    except Exception as cleanup_error:
+                        logger.warning(f"Failed to clean up file {file_path}: {cleanup_error}")
             return None
         finally:
             # Clean up thumbnail file if it was created locally

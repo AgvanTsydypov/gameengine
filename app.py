@@ -72,140 +72,6 @@ def fix_text_encoding(text):
     
     return text
 
-def generate_game_thumbnail(html_content: str, game_title: str) -> str:
-    """
-    Generate a thumbnail for a game using the HTML preview generator
-    
-    Args:
-        html_content: The HTML content of the game
-        game_title: The title of the game
-        
-    Returns:
-        Path to the generated thumbnail file, or None if failed
-    """
-    temp_html_path = None
-    generator = None
-    
-    try:
-        logger.info(f"Starting thumbnail generation for game: {game_title}")
-        
-        # Validate HTML content
-        if not html_content or len(html_content.strip()) == 0:
-            logger.error("Empty HTML content provided for thumbnail generation")
-            return None
-        
-        # Create a temporary HTML file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
-            temp_file.write(html_content)
-            temp_html_path = temp_file.name
-        
-        logger.info(f"Created temporary HTML file: {temp_html_path}")
-        
-        # Generate thumbnail using HTMLPreviewGenerator
-        generator = HTMLPreviewGenerator(headless=True, window_size=(800, 600))
-        
-        # Generate the thumbnail
-        thumbnail_path = generator.generate_preview(
-            html_file_path=temp_html_path,
-            wait_time=2  # Reduced wait time for faster publishing
-        )
-        
-        if thumbnail_path and os.path.exists(thumbnail_path):
-            file_size = os.path.getsize(thumbnail_path)
-            logger.info(f"Thumbnail generated successfully: {thumbnail_path} (size: {file_size} bytes)")
-            
-            # Validate thumbnail file
-            if file_size > 0:
-                return thumbnail_path
-            else:
-                logger.error("Generated thumbnail file is empty")
-                return None
-        else:
-            logger.error("Failed to generate thumbnail - no path returned or file doesn't exist")
-            return None
-                
-    except Exception as e:
-        logger.error(f"Error generating thumbnail for {game_title}: {e}")
-        import traceback
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        return None
-    finally:
-        # Clean up generator
-        if generator:
-            try:
-                generator.close()
-            except Exception as e:
-                logger.warning(f"Error closing generator: {e}")
-        
-        # Clean up temporary HTML file
-        if temp_html_path and os.path.exists(temp_html_path):
-            try:
-                os.unlink(temp_html_path)
-                logger.info(f"Cleaned up temporary HTML file: {temp_html_path}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up temporary file {temp_html_path}: {e}")
-
-def generate_game_thumbnail_with_retry(html_content: str, game_title: str) -> str:
-    """
-    Generate a thumbnail with retry mechanism and longer wait times
-    
-    Args:
-        html_content: The HTML content of the game
-        game_title: The title of the game
-        
-    Returns:
-        Path to the generated thumbnail file, or None if failed
-    """
-    temp_html_path = None
-    generator = None
-    
-    try:
-        logger.info(f"Retry thumbnail generation for game: {game_title}")
-        
-        # Create a temporary HTML file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
-            temp_file.write(html_content)
-            temp_html_path = temp_file.name
-        
-        # Generate thumbnail using HTMLPreviewGenerator with longer wait time
-        generator = HTMLPreviewGenerator(headless=True, window_size=(800, 600))
-        
-        # Generate the thumbnail with longer wait time
-        thumbnail_path = generator.generate_preview(
-            html_file_path=temp_html_path,
-            wait_time=5  # Longer wait time for retry
-        )
-        
-        if thumbnail_path and os.path.exists(thumbnail_path):
-            file_size = os.path.getsize(thumbnail_path)
-            logger.info(f"Retry thumbnail generated successfully: {thumbnail_path} (size: {file_size} bytes)")
-            
-            if file_size > 0:
-                return thumbnail_path
-            else:
-                logger.error("Retry generated thumbnail file is empty")
-                return None
-        else:
-            logger.error("Retry failed to generate thumbnail")
-            return None
-                
-    except Exception as e:
-        logger.error(f"Error in retry thumbnail generation for {game_title}: {e}")
-        return None
-    finally:
-        # Clean up generator
-        if generator:
-            try:
-                generator.close()
-            except Exception as e:
-                logger.warning(f"Error closing retry generator: {e}")
-        
-        # Clean up temporary HTML file
-        if temp_html_path and os.path.exists(temp_html_path):
-            try:
-                os.unlink(temp_html_path)
-            except Exception as e:
-                logger.warning(f"Failed to clean up retry temporary file {temp_html_path}: {e}")
 
 def generate_game_thumbnail_with_multiple_attempts(html_content: str, game_title: str) -> str:
     """
@@ -696,74 +562,6 @@ def create_game():
     authenticated = 'user_id' in session
     return render_template('create_game.html', authenticated=authenticated)
 
-@app.route('/upload-game', methods=['POST'])
-def upload_game():
-    """Handle HTML game file upload to Supabase storage"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Authentication required'}), 401
-    
-    try:
-        # Get form data
-        title = (request.form.get('title') or '').strip()
-        description = (request.form.get('description') or '').strip()
-        game_file = request.files.get('game_file')
-        
-        # Validate input
-        if not title:
-            return jsonify({'error': 'Game title is required'}), 400
-        
-        if not description:
-            return jsonify({'error': 'Game description is required'}), 400
-        
-        if not game_file or game_file.filename == '':
-            return jsonify({'error': 'HTML file is required'}), 400
-        
-        # Validate file type
-        if not (game_file.filename.lower().endswith('.html') or game_file.filename.lower().endswith('.htm')):
-            return jsonify({'error': 'Only HTML files are allowed'}), 400
-        
-        # Validate file size (16MB limit)
-        if len(game_file.read()) > 16 * 1024 * 1024:
-            return jsonify({'error': 'File size must be less than 16MB'}), 400
-        
-        # Reset file pointer
-        game_file.seek(0)
-        
-        # Read file content
-        file_content = game_file.read()
-        html_content = file_content.decode('utf-8')
-        
-        if not supabase_manager.is_connected():
-            return jsonify({'error': 'Storage service not available'}), 500
-        
-        # Generate thumbnail for the game with 3 attempts
-        logger.info(f"Generating thumbnail for game: {title}")
-        thumbnail_path = generate_game_thumbnail_with_multiple_attempts(html_content, title)
-        
-        # Save file to Supabase storage and create user_data record
-        result = supabase_manager.save_user_file(
-            user_id=str(session['user_id']),
-            file_content=file_content,
-            filename=game_file.filename,
-            content_type='text/html',
-            title=title,
-            description=description,
-            thumbnail_path=thumbnail_path
-        )
-        
-        if result:
-            logger.info(f"Game file uploaded successfully for user {session['user_id']}")
-            return jsonify({
-                'success': True, 
-                'message': 'Game uploaded successfully',
-                'file_id': result.get('id')
-            })
-        else:
-            return jsonify({'error': 'Failed to upload game file'}), 500
-            
-    except Exception as e:
-        logger.error(f"Error uploading game file: {e}")
-        return jsonify({'error': 'Upload failed. Please try again.'}), 500
 
 @app.route('/my-games')
 def my_games():
@@ -1201,6 +999,128 @@ def api_publish_game():
             
     except Exception as e:
         logger.error(f"Error publishing AI game: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/edit-game/<game_id>')
+def edit_game(game_id):
+    """Edit existing game page - requires authentication and ownership"""
+    if 'user_id' not in session:
+        flash('Please log in to edit games.', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        # Get the specific game data by ID
+        game = supabase_manager.get_game_by_id(str(game_id))
+        
+        if not game:
+            flash('Game not found.', 'error')
+            return redirect(url_for('my_games'))
+        
+        # Check if user owns this game
+        if str(game.get('user_id')) != str(session['user_id']):
+            flash('You can only edit your own games.', 'error')
+            return redirect(url_for('my_games'))
+        
+        # Fetch the HTML content from the storage URL
+        import requests
+        try:
+            response = requests.get(game['data_content'], timeout=10)
+            if response.status_code == 200:
+                html_content = response.text
+                # Fix encoding issues
+                html_content = fix_text_encoding(html_content)
+                
+                authenticated = 'user_id' in session
+                return render_template('edit_game.html', 
+                                     game=game, 
+                                     html_content=html_content, 
+                                     authenticated=authenticated)
+            else:
+                flash('Error loading game content.', 'error')
+                return redirect(url_for('my_games'))
+        except requests.RequestException as e:
+            logger.error(f"Error fetching game content: {e}")
+            flash('Error loading game content.', 'error')
+            return redirect(url_for('my_games'))
+        
+    except Exception as e:
+        logger.error(f"Error loading game for editing: {e}")
+        flash('Error loading game. Please try again.', 'error')
+        return redirect(url_for('my_games'))
+
+@app.route('/api/update-game', methods=['POST'])
+def api_update_game():
+    """Update existing game with new version"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    try:
+        data = request.get_json()
+        game_id = data.get('game_id')
+        title = (data.get('title') or '').strip()
+        description = (data.get('description') or '').strip()
+        html_content = (data.get('html_content') or '').strip()
+        
+        if not game_id:
+            return jsonify({'error': 'Game ID is required'}), 400
+        
+        if not title:
+            return jsonify({'error': 'Game title is required'}), 400
+        
+        if not description:
+            return jsonify({'error': 'Game description is required'}), 400
+        
+        if not html_content:
+            return jsonify({'error': 'Game HTML content is required'}), 400
+        
+        # Verify game exists and user owns it
+        game = supabase_manager.get_game_by_id(str(game_id))
+        if not game:
+            return jsonify({'error': 'Game not found'}), 404
+        
+        if str(game.get('user_id')) != str(session['user_id']):
+            return jsonify({'error': 'You can only update your own games'}), 403
+        
+        if not supabase_manager.is_connected():
+            return jsonify({'error': 'Storage service not available'}), 500
+        
+        # Generate new thumbnail for the updated game
+        logger.info(f"Generating new thumbnail for updated game: {title}")
+        try:
+            thumbnail_path = generate_game_thumbnail_with_multiple_attempts(html_content, title)
+            logger.info(f"Thumbnail generation result: {thumbnail_path}")
+        except Exception as e:
+            logger.error(f"Error generating thumbnail: {e}")
+            thumbnail_path = None
+        
+        # Update the game in Supabase
+        logger.info(f"Attempting to update game {game_id} for user {session['user_id']}")
+        logger.info(f"Title: {title}, Description: {description[:100]}..., HTML length: {len(html_content)}")
+        
+        result = supabase_manager.update_user_file(
+            data_id=str(game_id),
+            user_id=str(session['user_id']),
+            file_content=html_content.encode('utf-8'),
+            title=title,
+            description=description,
+            thumbnail_path=thumbnail_path
+        )
+        
+        logger.info(f"Update result: {result}")
+        
+        if result:
+            logger.info(f"Game updated successfully for user {session['user_id']}")
+            return jsonify({
+                'success': True,
+                'message': 'Game updated successfully',
+                'game_id': game_id
+            })
+        else:
+            logger.error(f"Failed to update game {game_id} - update_user_file returned None")
+            return jsonify({'error': 'Failed to update game'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error updating game: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':

@@ -46,6 +46,9 @@
               <a href="/play-uploaded/{{ game.id }}" class="btn btn-primary">
                 <span>🎮 PLAY</span>
               </a>
+              <a href="/edit-game/{{ game.id }}" class="btn btn-secondary">
+                <span>✏️ EDIT</span>
+              </a>
               <button class="btn btn-ghost" onclick="deleteGame('{{ game.id }}')">
                 <span>🗑️ DELETE</span>
               </button>
@@ -201,6 +204,37 @@ function deleteGame(gameId) {
 .game-card-actions .btn {
   flex: 1;
   text-align: center;
+}
+
+.btn-secondary {
+  background: linear-gradient(180deg, #1a1a2e, #16213e);
+  border: 2px solid #00ff88;
+  color: #00ff88;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background: linear-gradient(180deg, #00ff88, #00cc66);
+  color: #000;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 255, 136, 0.3);
+}
+
+.btn-secondary::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-secondary:hover::after {
+  left: 100%;
 }
 
 @media (max-width: 768px) {
