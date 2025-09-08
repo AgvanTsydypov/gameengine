@@ -43,13 +43,13 @@
             </div>
             
             <div class="game-card-actions">
-              <a href="/play-uploaded/{{ game.id }}" class="btn btn-primary">
+              <a href="/play-uploaded/{{ game.id }}" class="btn btn-secondary">
                 <span>🎮 PLAY</span>
               </a>
               <a href="/edit-game/{{ game.id }}" class="btn btn-secondary">
                 <span>✏️ EDIT</span>
               </a>
-              <button class="btn btn-ghost" onclick="deleteGame('{{ game.id }}')">
+              <button class="btn btn-secondary" onclick="deleteGame('{{ game.id }}')">
                 <span>🗑️ DELETE</span>
               </button>
             </div>
@@ -204,11 +204,26 @@ function deleteGame(gameId) {
 .game-card-actions .btn {
   flex: 1;
   text-align: center;
+  white-space: nowrap;
+  padding: 12px 8px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
+}
+
+.game-card-actions .btn span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
 }
 
 .btn-secondary {
   background: linear-gradient(180deg, #1a1a2e, #16213e);
-  border: 2px solid #00ff88;
+  border: 2px solid var(--line);
   color: #00ff88;
   position: relative;
   overflow: hidden;
