@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ game.filename or 'Uploaded Game' }} - AI Game Studio{% endblock %}
+{% block title %}{{ game.filename[:-5].replace('_', ' ').title() or 'Uploaded Game' }} - AI Game Studio{% endblock %}
 
 {% block content %}
 <main>
@@ -45,27 +45,6 @@
       </div>
 
       <!-- Game Info -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-        <div style="border: 2px solid var(--line); background: var(--card); padding: 20px;">
-          <h3 style="color: var(--cyber); margin-bottom: 12px;">GAME INFO</h3>
-          <div style="color: var(--muted); font-size: 10px;">
-            <p><strong>FILENAME:</strong> {{ game.filename or 'Untitled' }}</p>
-            <p><strong>TYPE:</strong> HTML Game</p>
-            <p><strong>UPLOADED:</strong> {{ game.created_at[:10] if game.created_at else 'Unknown' }}</p>
-            <p><strong>STATUS:</strong> Ready to Play</p>
-          </div>
-        </div>
-
-        <div style="border: 2px solid var(--line); background: var(--card); padding: 20px;">
-          <h3 style="color: var(--cyber); margin-bottom: 12px;">CONTROLS</h3>
-          <div style="color: var(--muted); font-size: 10px;">
-            <p><strong>FULLSCREEN:</strong> Click fullscreen button</p>
-            <p><strong>EXIT:</strong> ESC key or exit button</p>
-            <p><strong>RELOAD:</strong> Refresh page</p>
-            <p><strong>GAME CONTROLS:</strong> As defined in your HTML</p>
-          </div>
-        </div>
-      </div>
 
       <!-- Action Buttons -->
       <div style="text-align: center; margin-top: 40px;">
