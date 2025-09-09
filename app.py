@@ -162,6 +162,7 @@ def refine_game_with_deepseek(instruction: str, current_html: str):
             return new_html
         else:
             logger.error("Invalid HTML returned from DeepSeek refinement")
+            logger.error(f"HTML starts with: {new_html[:50] if new_html else 'None'}")
             return None
             
     except Exception as e:
@@ -437,12 +438,13 @@ def refine_game_with_ai(instruction: str, current_html: str, model_id: str = "gp
         new_html = (response.choices[0].message.content or "").strip()
         logger.info(f"Game refinement completed, HTML length: {len(new_html)}")
         
-        if new_html and new_html.startswith("<!"):
+        if new_html and (new_html.startswith("<!") or new_html.startswith("<html")):
             # Fix encoding issues in the refined HTML content
             new_html = fix_text_encoding(new_html)
             return new_html
         else:
             logger.error("Invalid HTML returned from refinement")
+            logger.error(f"HTML starts with: {new_html[:50] if new_html else 'None'}")
             return None
             
     except Exception as e:
