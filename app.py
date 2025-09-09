@@ -615,6 +615,16 @@ def register():
         try:
             result = create_user(email, password)
             if result:
+                # Ensure user gets 2 credits upon registration
+                user_id = result['user_id']
+                if supabase_manager.is_connected():
+                    # Create credits record for new user (should be automatic via trigger, but ensure it exists)
+                    current_credits = supabase_manager.get_user_credits(user_id)
+                    if current_credits == 0:
+                        # If no credits record exists, create one with 2 credits
+                        supabase_manager.create_user_credits_record(user_id, 2)
+                        logger.info(f"Created credits record for new user {user_id} with 2 credits")
+                
                 success_msg = 'Registration successful! You can now log in.'
                 # Check if this is an AJAX request
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
@@ -737,8 +747,23 @@ def create_game():
         flash('Please log in to create a game.', 'error')
         return redirect(url_for('index'))
     
+    # Get user's current credits
+    user_credits = 0
+    if supabase_manager.is_connected():
+        user_credits = supabase_manager.get_user_credits(str(session['user_id']))
+    
+    # Define model pricing
+    model_prices = {
+        'QP': 1,  # Quick Prototype - 1 credit
+        'PG': 2,  # Polished Game - 2 credits
+        'PE': 6   # Premium Experience - 6 credits
+    }
+    
     authenticated = 'user_id' in session
-    return render_template('create_game.html', authenticated=authenticated)
+    return render_template('create_game.html', 
+                         authenticated=authenticated, 
+                         user_credits=user_credits,
+                         model_prices=model_prices)
 
 
 @app.route('/my-games')
@@ -755,8 +780,13 @@ def my_games():
         # Filter for HTML games
         html_games = [game for game in user_games if game.get('data_type') == 'html_game']
         
+        # Get user's current credits
+        user_credits = 0
+        if supabase_manager.is_connected():
+            user_credits = supabase_manager.get_user_credits(str(session['user_id']))
+        
         authenticated = 'user_id' in session
-        return render_template('my_games.html', games=html_games, authenticated=authenticated)
+        return render_template('my_games.html', games=html_games, authenticated=authenticated, user_credits=user_credits)
         
     except Exception as e:
         logger.error(f"Error fetching user games: {e}")
@@ -1074,20 +1104,69 @@ def api_generate_game():
         if not prompt:
             return jsonify({'error': 'Game prompt is required'}), 400
         
+        # Define model pricing
+        model_prices = {
+            'QP': 1,  # Quick Prototype - 1 credit
+            'PG': 2,  # Polished Game - 2 credits
+            'PE': 6   # Premium Experience - 6 credits
+        }
+        
+        # Check if user has enough credits
+        required_credits = model_prices.get(obfuscated_model, 6)
+        user_credits = supabase_manager.get_user_credits(str(session['user_id']))
+        
+        if user_credits < required_credits:
+            return jsonify({
+                'error': f'Insufficient credits. You need {required_credits} credits but only have {user_credits}.',
+                'error_type': 'insufficient_credits',
+                'required_credits': required_credits,
+                'current_credits': user_credits
+            }), 400
+        
+        # Deduct credits FIRST before generating the game
+        deduction_success = supabase_manager.deduct_credits(str(session['user_id']), required_credits)
+        if not deduction_success:
+            return jsonify({
+                'error': f'Failed to deduct credits. You need {required_credits} credits but only have {user_credits}.',
+                'error_type': 'insufficient_credits',
+                'required_credits': required_credits,
+                'current_credits': user_credits
+            }), 400
+        
         # Generate game with AI
         game_data = generate_game_with_ai(prompt, model)
         
         if game_data:
+            # Get remaining credits after successful generation
+            remaining_credits = supabase_manager.get_user_credits(str(session['user_id']))
+            
             return jsonify({
                 'success': True,
                 'title': game_data['title'],
-                'html': game_data['html']
+                'html': game_data['html'],
+                'credits_deducted': required_credits,
+                'remaining_credits': remaining_credits
             })
         else:
-            return jsonify({'error': 'Failed to generate game. Please try again.'}), 500
+            # If generation fails, refund the credits
+            supabase_manager.add_credits(str(session['user_id']), required_credits)
+            return jsonify({
+                'error': 'Failed to generate game content. Credits have been refunded. Please try again.'
+            }), 500
             
     except Exception as e:
         logger.error(f"Error in game generation API: {e}")
+        # If we deducted credits but hit an error, refund them
+        try:
+            data = request.get_json()
+            obfuscated_model = data.get('model', 'PE')
+            model_prices = {
+                'QP': 1, 'PG': 2, 'PE': 6
+            }
+            required_credits = model_prices.get(obfuscated_model, 6)
+            supabase_manager.add_credits(str(session['user_id']), required_credits)
+        except:
+            pass  # If we can't refund, just log the error
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/refine-game', methods=['POST'])
@@ -1109,19 +1188,68 @@ def api_refine_game():
         if not current_html:
             return jsonify({'error': 'Current game HTML is required'}), 400
         
+        # Define model pricing (same as generation)
+        model_prices = {
+            'QP': 1,  # Quick Prototype - 1 credit
+            'PG': 2,  # Polished Game - 2 credits
+            'PE': 6   # Premium Experience - 6 credits
+        }
+        
+        # Check if user has enough credits
+        required_credits = model_prices.get(obfuscated_model, 6)
+        user_credits = supabase_manager.get_user_credits(str(session['user_id']))
+        
+        if user_credits < required_credits:
+            return jsonify({
+                'error': f'Insufficient credits. You need {required_credits} credits but only have {user_credits}.',
+                'error_type': 'insufficient_credits',
+                'required_credits': required_credits,
+                'current_credits': user_credits
+            }), 400
+        
+        # Deduct credits FIRST before refining the game
+        deduction_success = supabase_manager.deduct_credits(str(session['user_id']), required_credits)
+        if not deduction_success:
+            return jsonify({
+                'error': f'Failed to deduct credits. You need {required_credits} credits but only have {user_credits}.',
+                'error_type': 'insufficient_credits',
+                'required_credits': required_credits,
+                'current_credits': user_credits
+            }), 400
+        
         # Refine game with AI
         refined_html = refine_game_with_ai(instruction, current_html, model)
         
         if refined_html:
+            # Get remaining credits after successful refinement
+            remaining_credits = supabase_manager.get_user_credits(str(session['user_id']))
+            
             return jsonify({
                 'success': True,
-                'html': refined_html
+                'html': refined_html,
+                'credits_deducted': required_credits,
+                'remaining_credits': remaining_credits
             })
         else:
-            return jsonify({'error': 'Failed to refine game. Please try again.'}), 500
+            # If refinement fails, refund the credits
+            supabase_manager.add_credits(str(session['user_id']), required_credits)
+            return jsonify({
+                'error': 'Failed to refine game content. Credits have been refunded. Please try again.'
+            }), 500
             
     except Exception as e:
         logger.error(f"Error in game refinement API: {e}")
+        # If we deducted credits but hit an error, refund them
+        try:
+            data = request.get_json()
+            obfuscated_model = data.get('model', 'PE')
+            model_prices = {
+                'QP': 1, 'PG': 2, 'PE': 6
+            }
+            required_credits = model_prices.get(obfuscated_model, 6)
+            supabase_manager.add_credits(str(session['user_id']), required_credits)
+        except:
+            pass  # If we can't refund, just log the error
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/publish-game', methods=['POST'])
@@ -1203,6 +1331,18 @@ def edit_game(game_id):
             flash('You can only edit your own games.', 'error')
             return redirect(url_for('my_games'))
         
+        # Get user's current credits
+        user_credits = 0
+        if supabase_manager.is_connected():
+            user_credits = supabase_manager.get_user_credits(str(session['user_id']))
+        
+        # Define model pricing
+        model_prices = {
+            'QP': 1,  # Quick Prototype - 1 credit
+            'PG': 2,  # Polished Game - 2 credits
+            'PE': 6   # Premium Experience - 6 credits
+        }
+        
         # Fetch the HTML content from the storage URL
         import requests
         try:
@@ -1216,7 +1356,9 @@ def edit_game(game_id):
                 return render_template('edit_game.html', 
                                      game=game, 
                                      html_content=html_content, 
-                                     authenticated=authenticated)
+                                     authenticated=authenticated,
+                                     user_credits=user_credits,
+                                     model_prices=model_prices)
             else:
                 flash('Error loading game content.', 'error')
                 return redirect(url_for('my_games'))
@@ -1303,6 +1445,28 @@ def api_update_game():
             
     except Exception as e:
         logger.error(f"Error updating game: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+# ============ CREDITS SYSTEM API ENDPOINTS ============
+
+@app.route('/api/user-credits', methods=['GET'])
+def api_get_user_credits():
+    """Get current user's credits"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    try:
+        if not supabase_manager.is_connected():
+            return jsonify({'error': 'Database not available'}), 500
+        
+        credits = supabase_manager.get_user_credits(str(session['user_id']))
+        return jsonify({
+            'success': True,
+            'credits': credits
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting user credits: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':

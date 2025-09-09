@@ -1086,5 +1086,166 @@ class SupabaseManager:
             logger.error(f"Error incrementing play count for game {game_id}: {e}")
             return False
 
+    # ============ CREDITS SYSTEM METHODS ============
+    
+    def get_user_credits(self, user_id: str) -> int:
+        """
+        Gets the current credits for a user
+        
+        Args:
+            user_id: ID of the user
+            
+        Returns:
+            Number of credits the user has, 0 if not found
+        """
+        if not self.is_connected():
+            return 0
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                response = service_client.table('user_credits').select('credits').eq('user_id', user_id).execute()
+                
+                if response.data and len(response.data) > 0:
+                    return response.data[0]['credits']
+                else:
+                    # User doesn't have credits record yet, create one with 2 credits
+                    logger.info(f"User {user_id} doesn't have credits record, creating one with 2 credits")
+                    return self.create_user_credits_record(user_id, 2)
+                    
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Error getting credits for user {user_id}: {e}")
+            return 0
+    
+    def create_user_credits_record(self, user_id: str, initial_credits: int = 2) -> int:
+        """
+        Creates a credits record for a user
+        
+        Args:
+            user_id: ID of the user
+            initial_credits: Initial number of credits (default 2)
+            
+        Returns:
+            Number of credits created, 0 if failed
+        """
+        if not self.is_connected():
+            return 0
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                response = service_client.table('user_credits').insert({
+                    'user_id': user_id,
+                    'credits': initial_credits
+                }).execute()
+                
+                if response.data and len(response.data) > 0:
+                    logger.info(f"Created credits record for user {user_id} with {initial_credits} credits")
+                    return response.data[0]['credits']
+                    
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Error creating credits record for user {user_id}: {e}")
+            return 0
+    
+    def update_user_credits(self, user_id: str, new_credits: int) -> bool:
+        """
+        Updates the credits for a user
+        
+        Args:
+            user_id: ID of the user
+            new_credits: New number of credits
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_connected():
+            return False
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                response = service_client.table('user_credits').update({
+                    'credits': new_credits,
+                    'updated_at': 'now()'
+                }).eq('user_id', user_id).execute()
+                
+                if response.data and len(response.data) > 0:
+                    logger.info(f"Updated credits for user {user_id} to {new_credits}")
+                    return True
+                else:
+                    # User doesn't have credits record yet, create one
+                    logger.info(f"User {user_id} doesn't have credits record, creating one with {new_credits} credits")
+                    return self.create_user_credits_record(user_id, new_credits) > 0
+                    
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error updating credits for user {user_id}: {e}")
+            return False
+    
+    def deduct_credits(self, user_id: str, amount: int) -> bool:
+        """
+        Deducts credits from a user's account
+        
+        Args:
+            user_id: ID of the user
+            amount: Number of credits to deduct
+            
+        Returns:
+            True if successful, False if insufficient credits or error
+        """
+        if not self.is_connected():
+            return False
+        
+        try:
+            current_credits = self.get_user_credits(user_id)
+            
+            if current_credits < amount:
+                logger.warning(f"User {user_id} has insufficient credits: {current_credits} < {amount}")
+                return False
+            
+            new_credits = current_credits - amount
+            return self.update_user_credits(user_id, new_credits)
+            
+        except Exception as e:
+            logger.error(f"Error deducting credits for user {user_id}: {e}")
+            return False
+    
+    def add_credits(self, user_id: str, amount: int) -> bool:
+        """
+        Adds credits to a user's account
+        
+        Args:
+            user_id: ID of the user
+            amount: Number of credits to add
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_connected():
+            return False
+        
+        try:
+            current_credits = self.get_user_credits(user_id)
+            new_credits = current_credits + amount
+            return self.update_user_credits(user_id, new_credits)
+            
+        except Exception as e:
+            logger.error(f"Error adding credits for user {user_id}: {e}")
+            return False
+
 # Глобальный экземпляр менеджера Supabase
 supabase_manager = SupabaseManager()
