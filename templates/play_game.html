@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}{{ game.title }} - AI Game Studio{% endblock %}
+
+{% block content %}
+<main>
+  <section class="hero">
+    <div class="kicker"><span class="dot"></span>NOW PLAYING</div>
+    <h1>{{ game.title }}</h1>
+    <p class="sub">{{ game.category }} game • Click to start playing</p>
+  </section>
+
+  <section class="section">
+    <div style="max-width: 900px; margin: 0 auto;">
+      <!-- Game Container -->
+      <div style="border: 2px solid var(--cyber); background: var(--card); padding: 0; margin-bottom: 40px;">
+        <div id="game-canvas" style="background: var(--bg); height: 500px; display: flex; align-items: center; justify-content: center; position: relative; cursor: crosshair;">
+          <div id="game-start-screen" style="text-align: center;">
+            <h2 style="color: var(--cyber); margin-bottom: 16px;">{{ game.title }}</h2>
+            <p style="color: var(--muted); margin-bottom: 20px;">{{ game.category }} GAME</p>
+            <button class="btn btn-cta" onclick="startGame()"><span>▶ START GAME</span></button>
+          </div>
+          
+          <div id="game-playing" style="display: none; text-align: center; color: var(--fg);">
+            <div style="font-size: 10px; margin-bottom: 16px;">SCORE: <span id="score">0</span></div>
+            <div style="border: 2px solid var(--line); width: 400px; height: 300px; margin: 0 auto; display: flex; align-items: center; justify-content: center; position: relative;">
+              <div id="game-object" style="width: 20px; height: 20px; background: var(--cyber); position: absolute; left: 190px; top: 140px; transition: all 0.1s;"></div>
+              <span style="color: var(--muted); font-size: 8px;">USE ARROW KEYS TO MOVE</span>
+            </div>
+            <div style="margin-top: 16px;">
+              <button class="btn btn-ghost" onclick="pauseGame()" style="margin-right: 10px;"><span>⏸ PAUSE</span></button>
+              <button class="btn btn-ghost" onclick="restartGame()"><span>🔄 RESTART</span></button>
+            </div>
+          </div>
+
+          <div id="game-over" style="display: none; text-align: center;">
+            <h2 style="color: var(--pink); margin-bottom: 16px;">GAME OVER</h2>
+            <p style="color: var(--muted); margin-bottom: 8px;">FINAL SCORE: <span id="final-score">0</span></p>
+            <p style="color: var(--muted); margin-bottom: 20px;">Thanks for playing!</p>
+            <button class="btn btn-cta" onclick="restartGame()"><span>🔄 PLAY AGAIN</span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Game Info -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div style="border: 2px solid var(--line); background: var(--card); padding: 20px;">
+          <h3 style="color: var(--cyber); margin-bottom: 12px;">GAME INFO</h3>
+          <div style="color: var(--muted); font-size: 10px;">
+            <p><strong>CATEGORY:</strong> {{ game.category }}</p>
+            <p><strong>CONTROLS:</strong> Arrow Keys</p>
+            <p><strong>OBJECTIVE:</strong> Survive as long as possible</p>
+            <p><strong>DIFFICULTY:</strong> Progressive</p>
+          </div>
+        </div>
+
+        <div style="border: 2px solid var(--line); background: var(--card); padding: 20px;">
+          <h3 style="color: var(--cyber); margin-bottom: 12px;">LEADERBOARD</h3>
+          <div style="color: var(--muted); font-size: 10px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span>1. PLAYER_001</span>
+              <span style="color: var(--cyber);">9,450</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span>2. COSMIC_ACE</span>
+              <span style="color: var(--cyber);">8,720</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span>3. PIXEL_MASTER</span>
+              <span style="color: var(--cyber);">7,890</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>4. RETRO_GAMER</span>
+              <span style="color: var(--cyber);">6,540</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div style="text-align: center; margin-top: 40px;">
+        <a class="btn btn-ghost" href="{{ url_for('games') }}" style="margin-right: 10px;"><span>← BACK TO GAMES</span></a>
+        {% if session.user_id %}
+          <a class="btn btn-cta" href="{{ url_for('create_game') }}"><span>+ CREATE YOUR OWN</span></a>
+        {% else %}
+          <a class="btn btn-cta auth-required" href="#" id="create-game-btn"><span>+ CREATE YOUR OWN</span></a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let gameState = 'start'; // start, playing, paused, over
+let score = 0;
+let gameLoop;
+let gameSpeed = 100;
+
+function startGame() {
+  document.getElementById('game-start-screen').style.display = 'none';
+  document.getElementById('game-playing').style.display = 'block';
+  document.getElementById('game-over').style.display = 'none';
+  
+  gameState = 'playing';
+  score = 0;
+  updateScore();
+  
+  // Simple game loop
+  gameLoop = setInterval(() => {
+    if (gameState === 'playing') {
+      score += 10;
+      updateScore();
+      
+      // Increase difficulty
+      if (score % 500 === 0 && gameSpeed > 50) {
+        gameSpeed -= 5;
+        clearInterval(gameLoop);
+        gameLoop = setInterval(arguments.callee, gameSpeed);
+      }
+      
+      // Random game over (mock)
+      if (Math.random() < 0.01) {
+        gameOver();
+      }
+    }
+  }, gameSpeed);
+}
+
+function pauseGame() {
+  if (gameState === 'playing') {
+    gameState = 'paused';
+    document.querySelector('#game-playing button span').textContent = '▶ RESUME';
+  } else if (gameState === 'paused') {
+    gameState = 'playing';
+    document.querySelector('#game-playing button span').textContent = '⏸ PAUSE';
+  }
+}
+
+function restartGame() {
+  clearInterval(gameLoop);
+  gameState = 'start';
+  score = 0;
+  gameSpeed = 100;
+  
+  document.getElementById('game-start-screen').style.display = 'block';
+  document.getElementById('game-playing').style.display = 'none';
+  document.getElementById('game-over').style.display = 'none';
+}
+
+function gameOver() {
+  clearInterval(gameLoop);
+  gameState = 'over';
+  
+  document.getElementById('game-playing').style.display = 'none';
+  document.getElementById('game-over').style.display = 'block';
+  document.getElementById('final-score').textContent = score;
+}
+
+function updateScore() {
+  document.getElementById('score').textContent = score;
+}
+
+// Simple keyboard controls for demo
+document.addEventListener('keydown', (e) => {
+  if (gameState !== 'playing') return;
+  
+  const gameObject = document.getElementById('game-object');
+  const rect = gameObject.getBoundingClientRect();
+  const container = gameObject.parentElement.getBoundingClientRect();
+  
+  let left = parseInt(gameObject.style.left) || 190;
+  let top = parseInt(gameObject.style.top) || 140;
+  
+  switch(e.key) {
+    case 'ArrowUp':
+      if (top > 10) gameObject.style.top = (top - 10) + 'px';
+      break;
+    case 'ArrowDown':
+      if (top < 270) gameObject.style.top = (top + 10) + 'px';
+      break;
+    case 'ArrowLeft':
+      if (left > 10) gameObject.style.left = (left - 10) + 'px';
+      break;
+    case 'ArrowRight':
+      if (left < 370) gameObject.style.left = (left + 10) + 'px';
+      break;
+  }
+  
+  e.preventDefault();
+});
+
+// Auth required button
+document.getElementById('create-game-btn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  App.showAlert('Please log in to create a game', 'error');
+  document.getElementById('login-btn')?.click();
+});
+</script>
+{% endblock %}
