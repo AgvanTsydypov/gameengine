@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="dark" />
-  <title>{% block title %}AI Game Studio — Pixel{% endblock %}</title>
+  <title>{% block title %}Essence{% endblock %}</title>
   <!-- Pixel/retro font -->
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
@@ -17,13 +17,13 @@
     <nav class="nav" aria-label="Main">
       <a class="logo" href="{{ url_for('index') }}" aria-label="AI Game Studio Home">
         <span class="chip"></span>
-        <b>AI Game Studio</b>
+        <b>AI GAME STUDIO</b>
         <small>• v0.1</small>
       </a>
       <div class="actions">
         <a class="btn btn-ghost" href="{{ url_for('games') }}"><span>GAMES</span></a>
         {% if session.user_id %}
-          <a class="btn btn-ghost" href="{{ url_for('my_games') }}"><span>MY GAMES</span></a>
+          <a class="btn btn-ghost" href="{{ url_for('my_games') }}"><span>PROFILE</span></a>
           <a class="btn btn-ghost" href="{{ url_for('logout') }}"><span>LOGOUT</span></a>
         {% else %}
           <a class="btn btn-ghost" href="#" id="login-btn"><span>LOGIN</span></a>

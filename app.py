@@ -542,8 +542,8 @@ def index():
     
     try:
         if supabase_manager.is_connected():
-            # Get top 3 trending games ordered by likes
-            uploaded_games_raw = supabase_manager.get_games_with_stats(limit=3, order_by='likes_count')
+            # Get top 3 trending games ordered by likes with nicknames
+            uploaded_games_raw = supabase_manager.get_games_with_nicknames(limit=3, order_by='likes_count')
             
             # Get user's liked games if authenticated
             if 'user_id' in session:
@@ -577,7 +577,9 @@ def index():
                     'is_liked': game.get('id') in user_liked_games,
                     'description': description,
                     'created_at': game.get('created_at'),
-                    'thumbnail_url': game.get('thumbnail_url')
+                    'thumbnail_url': game.get('thumbnail_url'),
+                    'user_nickname': game.get('user_nickname'),
+                    'user_id': game.get('user_id')
                 })
     except Exception as e:
         logger.error(f"Error fetching trending games: {e}")
@@ -691,11 +693,21 @@ def games():
     """Games page - displays all uploaded games from the database with likes and stats"""
     uploaded_games = []
     user_liked_games = []
+    search_query = request.args.get('search', '').strip()
+    sort_by = request.args.get('sort', 'likes_count').strip()
+    
+    # Validate sort parameter
+    valid_sorts = ['likes_count', 'created_at', 'plays_count']
+    if sort_by not in valid_sorts:
+        sort_by = 'likes_count'
     
     try:
         if supabase_manager.is_connected():
-            # Get games with statistics (likes, plays) ordered by likes count (trending)
-            uploaded_games_raw = supabase_manager.get_games_with_stats(order_by='likes_count')
+            # Get games with statistics and nicknames ordered by selected sort option
+            if search_query:
+                uploaded_games_raw = supabase_manager.search_games_with_stats(search_query, order_by=sort_by)
+            else:
+                uploaded_games_raw = supabase_manager.get_games_with_nicknames(order_by=sort_by)
             
             # Get user's liked games if authenticated
             if 'user_id' in session:
@@ -732,13 +744,15 @@ def games():
                     'filename': game.get('filename'),
                     'data_content': game.get('data_content'),
                     'created_at': game.get('created_at'),
-                    'thumbnail_url': game.get('thumbnail_url')
+                    'thumbnail_url': game.get('thumbnail_url'),
+                    'user_nickname': game.get('user_nickname'),
+                    'user_id': game.get('user_id')
                 })
     except Exception as e:
         logger.error(f"Error fetching uploaded games: {e}")
     
     authenticated = 'user_id' in session
-    return render_template('games.html', games=uploaded_games, authenticated=authenticated)
+    return render_template('games.html', games=uploaded_games, authenticated=authenticated, search_query=search_query, sort_by=sort_by)
 
 @app.route('/create-game')
 def create_game():
@@ -773,9 +787,14 @@ def my_games():
         flash('Please log in to view your games.', 'error')
         return redirect(url_for('index'))
     
+    search_query = request.args.get('search', '').strip()
+    
     try:
         # Get user's uploaded games from Supabase
-        user_games = supabase_manager.get_user_data(str(session['user_id']))
+        if search_query:
+            user_games = supabase_manager.search_user_games(str(session['user_id']), search_query)
+        else:
+            user_games = supabase_manager.get_user_data(str(session['user_id']))
         
         # Filter for HTML games
         html_games = [game for game in user_games if game.get('data_type') == 'html_game']
@@ -785,13 +804,72 @@ def my_games():
         if supabase_manager.is_connected():
             user_credits = supabase_manager.get_user_credits(str(session['user_id']))
         
+        # Get user's nickname
+        user_nickname = None
+        if supabase_manager.is_connected():
+            user_nickname = supabase_manager.get_user_nickname(str(session['user_id']))
+        
         authenticated = 'user_id' in session
-        return render_template('my_games.html', games=html_games, authenticated=authenticated, user_credits=user_credits)
+        return render_template('my_games.html', games=html_games, authenticated=authenticated, user_credits=user_credits, user_nickname=user_nickname, search_query=search_query)
         
     except Exception as e:
         logger.error(f"Error fetching user games: {e}")
         flash('Error loading your games. Please try again.', 'error')
         return redirect(url_for('index'))
+
+
+@app.route('/set-nickname', methods=['POST'])
+def set_nickname():
+    """Set or update user's nickname"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'error': 'Please log in to set your nickname.'}), 401
+    
+    try:
+        data = request.get_json()
+        nickname = data.get('nickname', '').strip()
+        
+        if not nickname:
+            return jsonify({'success': False, 'error': 'Nickname cannot be empty.'}), 400
+        
+        # Validate nickname length and characters
+        if len(nickname) < 2 or len(nickname) > 50:
+            return jsonify({'success': False, 'error': 'Nickname must be between 2 and 50 characters.'}), 400
+        
+        # Check for valid characters (alphanumeric, spaces, hyphens, underscores)
+        import re
+        if not re.match(r'^[a-zA-Z0-9\s\-_]+$', nickname):
+            return jsonify({'success': False, 'error': 'Nickname can only contain letters, numbers, spaces, hyphens, and underscores.'}), 400
+        
+        # Set the nickname
+        success = supabase_manager.set_user_nickname(str(session['user_id']), nickname)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Nickname saved successfully!'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save nickname. It may already be taken.'}), 400
+            
+    except Exception as e:
+        logger.error(f"Error setting nickname: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while saving your nickname.'}), 500
+
+
+@app.route('/delete-nickname', methods=['POST'])
+def delete_nickname():
+    """Delete user's nickname"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'error': 'Please log in to delete your nickname.'}), 401
+    
+    try:
+        success = supabase_manager.delete_user_nickname(str(session['user_id']))
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Nickname deleted successfully!'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete nickname.'}), 400
+            
+    except Exception as e:
+        logger.error(f"Error deleting nickname: {e}")
+        return jsonify({'success': False, 'error': 'An error occurred while deleting your nickname.'}), 500
 
 
 @app.route('/play-uploaded/<game_id>')
@@ -804,6 +882,14 @@ def play_uploaded_game(game_id):
         if not game:
             flash('Game not found.', 'error')
             return redirect(url_for('games'))
+        
+        # Get the author's nickname
+        author_nickname = None
+        if game.get('user_id'):
+            author_nickname = supabase_manager.get_user_nickname(str(game['user_id']))
+        
+        # Add nickname to game data
+        game['author_nickname'] = author_nickname
         
         # Increment play count
         supabase_manager.increment_game_play_count(str(game_id))

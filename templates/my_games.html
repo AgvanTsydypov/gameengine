@@ -14,6 +14,53 @@
     </div>
   </section>
 
+  <!-- Profile Section -->
+  <section class="section">
+    <div style="max-width: 600px; margin: 0 auto;">
+      <div class="profile-card">
+        <div class="profile-header">
+          <h2 style="color: var(--cyber); margin: 0;">PROFILE SETTINGS</h2>
+        </div>
+        
+        <div class="profile-content">
+          <form id="nickname-form" class="nickname-form">
+            <div class="form-group">
+              <label for="nickname" class="form-label">Your Nickname</label>
+              <div class="input-group">
+                <input 
+                  type="text" 
+                  id="nickname" 
+                  name="nickname" 
+                  class="form-input" 
+                  placeholder="Enter your nickname..." 
+                  value="{{ user_nickname or '' }}"
+                  maxlength="50"
+                  autocomplete="off"
+                >
+                <button type="submit" class="btn btn-primary" id="save-nickname-btn">
+                  <span id="save-btn-text">💾 SAVE</span>
+                </button>
+              </div>
+              <div class="form-help">
+                Choose a unique nickname that will be displayed with your games (2-50 characters, letters, numbers, spaces, hyphens, and underscores only)
+              </div>
+            </div>
+          </form>
+          
+          {% if user_nickname %}
+          <div class="current-nickname">
+            <span class="nickname-label">Current nickname:</span>
+            <span class="nickname-value">{{ user_nickname }}</span>
+            <button class="btn btn-secondary btn-sm" onclick="deleteNickname()">
+              <span>🗑️ REMOVE</span>
+            </button>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="section">
     <div style="max-width: 1200px; margin: 0 auto;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
@@ -21,6 +68,36 @@
         <a href="/create-game" class="btn btn-cta">
           <span>📤 CREATE NEW GAME</span>
         </a>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="search-container" style="justify-content: flex-end;">
+        <form class="search-form" method="GET" action="{{ url_for('my_games') }}">
+          <div class="search-input-group">
+            <input 
+              type="text" 
+              name="search" 
+              class="search-input" 
+              placeholder="Search your games by title..." 
+              value="{{ search_query or '' }}"
+              autocomplete="off"
+            >
+            <button type="submit" class="search-btn">
+              <span class="search-icon">🔍</span>
+            </button>
+            {% if search_query %}
+            <a href="{{ url_for('my_games') }}" class="clear-search-btn" title="Clear search">
+              <span class="clear-icon">✕</span>
+            </a>
+            {% endif %}
+          </div>
+        </form>
+        {% if search_query %}
+        <div class="search-results-info">
+          <span class="search-info">Search results for: <strong>"{{ search_query }}"</strong></span>
+          <span class="results-count">{{ games|length }} game{{ 's' if games|length != 1 else '' }} found</span>
+        </div>
+        {% endif %}
       </div>
 
       {% if games %}
@@ -104,6 +181,158 @@ function deleteGame(gameId) {
       console.error('Delete error:', error);
       App.showAlert('Failed to delete game', 'error');
     });
+  }
+}
+
+// Search functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const searchInput = document.querySelector('.search-input');
+  const searchForm = document.querySelector('.search-form');
+
+  if (searchInput && searchForm) {
+    // Handle Enter key to submit search
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        searchForm.submit();
+      }
+    });
+
+    // Focus search input on page load if no search query
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.get('search')) {
+      searchInput.focus();
+    }
+  }
+
+  // Nickname form functionality
+  const nicknameForm = document.getElementById('nickname-form');
+  const nicknameInput = document.getElementById('nickname');
+  const saveBtn = document.getElementById('save-nickname-btn');
+  const saveBtnText = document.getElementById('save-btn-text');
+
+  if (nicknameForm && nicknameInput && saveBtn) {
+    // Handle form submission
+    nicknameForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      saveNickname();
+    });
+
+    // Real-time validation
+    nicknameInput.addEventListener('input', function() {
+      const nickname = this.value.trim();
+      const isValid = validateNickname(nickname);
+      
+      if (nickname.length > 0 && !isValid) {
+        this.style.borderColor = '#ff4444';
+      } else {
+        this.style.borderColor = '';
+      }
+    });
+  }
+});
+
+function validateNickname(nickname) {
+  if (!nickname || nickname.length < 2 || nickname.length > 50) {
+    return false;
+  }
+  // Check for valid characters (alphanumeric, spaces, hyphens, underscores)
+  const validPattern = /^[a-zA-Z0-9\s\-_]+$/;
+  return validPattern.test(nickname);
+}
+
+function saveNickname() {
+  const nicknameInput = document.getElementById('nickname');
+  const saveBtn = document.getElementById('save-nickname-btn');
+  const saveBtnText = document.getElementById('save-btn-text');
+  
+  const nickname = nicknameInput.value.trim();
+  
+  if (!validateNickname(nickname)) {
+    App.showAlert('Nickname must be 2-50 characters and contain only letters, numbers, spaces, hyphens, and underscores', 'error');
+    return;
+  }
+  
+  // Disable button and show loading
+  saveBtn.disabled = true;
+  saveBtnText.textContent = '⏳ SAVING...';
+  
+  fetch('/set-nickname', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ nickname: nickname })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      App.showAlert('Nickname saved successfully!', 'success');
+      // Update the current nickname display
+      updateCurrentNicknameDisplay(nickname);
+    } else {
+      App.showAlert(data.error || 'Failed to save nickname', 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Save nickname error:', error);
+    App.showAlert('Failed to save nickname', 'error');
+  })
+  .finally(() => {
+    // Re-enable button
+    saveBtn.disabled = false;
+    saveBtnText.textContent = '💾 SAVE';
+  });
+}
+
+function deleteNickname() {
+  if (confirm('Are you sure you want to remove your nickname? This will make your games display with your user ID instead.')) {
+    fetch('/delete-nickname', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        App.showAlert('Nickname removed successfully!', 'success');
+        // Reload the page to update the display
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        App.showAlert(data.error || 'Failed to remove nickname', 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Delete nickname error:', error);
+      App.showAlert('Failed to remove nickname', 'error');
+    });
+  }
+}
+
+function updateCurrentNicknameDisplay(nickname) {
+  const currentNicknameDiv = document.querySelector('.current-nickname');
+  if (currentNicknameDiv) {
+    const nicknameValue = currentNicknameDiv.querySelector('.nickname-value');
+    if (nicknameValue) {
+      nicknameValue.textContent = nickname;
+    }
+  } else {
+    // Create the current nickname display if it doesn't exist
+    const profileContent = document.querySelector('.profile-content');
+    if (profileContent) {
+      const currentNicknameDiv = document.createElement('div');
+      currentNicknameDiv.className = 'current-nickname';
+      currentNicknameDiv.innerHTML = `
+        <span class="nickname-label">Current nickname:</span>
+        <span class="nickname-value">${nickname}</span>
+        <button class="btn btn-secondary btn-sm" onclick="deleteNickname()">
+          <span>🗑️ REMOVE</span>
+        </button>
+      `;
+      profileContent.appendChild(currentNicknameDiv);
+    }
   }
 }
 </script>
@@ -290,6 +519,139 @@ function deleteGame(gameId) {
   }
 }
 
+/* Profile Section Styles */
+.profile-card {
+  border: 2px solid var(--line);
+  background: var(--card);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 40px;
+}
+
+.profile-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(135deg, var(--grid), var(--card));
+}
+
+.profile-content {
+  padding: 20px;
+}
+
+.nickname-form {
+  margin-bottom: 16px;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-label {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.input-group {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.form-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--cyber);
+  box-shadow: 0 0 0 3px rgba(0, 255, 255, 0.1);
+}
+
+.form-input::placeholder {
+  color: var(--muted);
+}
+
+.form-help {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--cyber), #00cc99);
+  border: 2px solid var(--cyber);
+  color: var(--bg);
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #00cc99, var(--cyber));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 255, 255, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-sm {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.current-nickname {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--grid), var(--card));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-top: 16px;
+}
+
+.nickname-label {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.nickname-value {
+  color: var(--cyber);
+  font-size: 16px;
+  font-weight: 600;
+  background: var(--bg);
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+}
+
 @media (max-width: 768px) {
   .games-grid {
     grid-template-columns: 1fr;
@@ -312,6 +674,28 @@ function deleteGame(gameId) {
   .credits-display {
     font-size: 14px;
     padding: 10px 16px;
+  }
+  
+  .profile-card {
+    margin-bottom: 24px;
+  }
+  
+  .profile-header {
+    padding: 12px 16px;
+  }
+  
+  .profile-content {
+    padding: 16px;
+  }
+  
+  .input-group {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .btn-primary {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

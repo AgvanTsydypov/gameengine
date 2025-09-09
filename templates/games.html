@@ -11,6 +11,54 @@
   </section>
 
   <section class="section">
+    <!-- Search and Sort Controls -->
+    <div class="search-container">
+      <!-- Sort Controls -->
+      <div class="sort-controls">
+        <form class="sort-form" method="GET" action="{{ url_for('games') }}">
+          {% if search_query %}
+          <input type="hidden" name="search" value="{{ search_query }}">
+          {% endif %}
+          <div class="sort-group">
+            <label for="sort-select" class="sort-label">SORT BY:</label>
+            <select name="sort" id="sort-select" class="sort-select">
+              <option value="likes_count" {{ 'selected' if sort_by == 'likes_count' else '' }}>Most Liked</option>
+              <option value="created_at" {{ 'selected' if sort_by == 'created_at' else '' }}>Newest First</option>
+              <option value="plays_count" {{ 'selected' if sort_by == 'plays_count' else '' }}>Most Played</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      
+      <form class="search-form" method="GET" action="{{ url_for('games') }}">
+        <div class="search-input-group">
+          <input 
+            type="text" 
+            name="search" 
+            class="search-input" 
+            placeholder="Search games by title..." 
+            value="{{ search_query or '' }}"
+            autocomplete="off"
+          >
+          <button type="submit" class="search-btn">
+            <span class="search-icon">🔍</span>
+          </button>
+          {% if search_query %}
+          <a href="{{ url_for('games') }}" class="clear-search-btn" title="Clear search">
+            <span class="clear-icon">✕</span>
+          </a>
+          {% endif %}
+        </div>
+      </form>
+      
+      {% if search_query %}
+      <div class="search-results-info">
+        <span class="search-info">Search results for: <strong>"{{ search_query }}"</strong></span>
+        <span class="results-count">{{ games|length }} game{{ 's' if games|length != 1 else '' }} found</span>
+      </div>
+      {% endif %}
+    </div>
+
     {% if games %}
     <div class="games-grid">
       {% for game in games %}
@@ -24,6 +72,13 @@
         <div class="game-card-header">
           <h3 class="game-title">{{ game.title }}</h3>
           <div class="game-meta">
+            <span class="game-author">
+              {% if game.user_nickname %}
+                by <strong>{{ game.user_nickname }}</strong>
+              {% else %}
+                by <strong>User {{ game.user_id[:8] if game.user_id else 'Unknown' }}</strong>
+              {% endif %}
+            </span>
             <span class="game-date">{{ game.created_at[:10] if game.created_at else 'Recent' }}</span>
           </div>
         </div>
@@ -353,5 +408,134 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 });
+
+// Search functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const searchInput = document.querySelector('.search-input');
+  const searchForm = document.querySelector('.search-form');
+
+  if (searchInput && searchForm) {
+    // Handle Enter key to submit search
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        searchForm.submit();
+      }
+    });
+
+    // Focus search input on page load if no search query
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.get('search')) {
+      searchInput.focus();
+    }
+  }
+});
+
+// Sort functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const sortSelect = document.getElementById('sort-select');
+  const sortForm = document.querySelector('.sort-form');
+
+  if (sortSelect && sortForm) {
+    // Auto-submit form when sort selection changes
+    sortSelect.addEventListener('change', function() {
+      sortForm.submit();
+    });
+  }
+});
 </script>
+
+<style>
+.game-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.game-author {
+  color: var(--cyber);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.game-date {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Sort Controls Styles */
+.sort-controls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sort-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sort-label {
+  color: var(--cyber);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sort-select {
+  background: var(--card);
+  border: 2px solid var(--line);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+
+.sort-select:hover {
+  border-color: var(--cyber);
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: var(--cyber);
+  box-shadow: 0 0 0 3px rgba(0, 255, 255, 0.1);
+}
+
+.sort-select option {
+  background: var(--card);
+  color: var(--text);
+  padding: 8px;
+}
+
+@media (max-width: 768px) {
+  .search-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  
+  .search-form {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .sort-controls {
+    justify-content: center;
+  }
+  
+  .sort-group {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .sort-select {
+    min-width: 160px;
+  }
+}
+</style>
 {% endblock %}

@@ -7,7 +7,13 @@
   <section class="hero">
     <div class="kicker"><span class="dot"></span>PLAYING CREATED GAME</div>
     <h1>{{ game.title or 'Untitled Game' }}</h1>
-    <p class="sub">Click to start playing</p>
+    <p class="sub">
+      {% if game.author_nickname %}
+        Created by <strong style="color: cyan;">{{ game.author_nickname }}</strong>
+      {% else %}
+        Created by <strong>User {{ game.user_id[:8] if game.user_id else 'Unknown' }}</strong>
+      {% endif %}
+    </p>
   </section>
 
   <section class="section">

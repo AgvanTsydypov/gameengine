@@ -34,6 +34,13 @@
         <div class="game-card-header">
           <h3 class="game-title">{{ game.title }}</h3>
           <div class="game-meta">
+            <span class="game-author">
+              {% if game.user_nickname %}
+                by <strong>{{ game.user_nickname }}</strong>
+              {% else %}
+                by <strong>User {{ game.user_id[:8] if game.user_id else 'Unknown' }}</strong>
+              {% endif %}
+            </span>
             <span class="game-date">{{ game.created_at[:10] if game.created_at else 'Unknown' }}</span>
           </div>
         </div>
@@ -144,4 +151,24 @@
     </div>
   </div>
 </div>
+
+<style>
+.game-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.game-author {
+  color: var(--cyber);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.game-date {
+  color: var(--muted);
+  font-size: 12px;
+}
+</style>
 {% endblock %}

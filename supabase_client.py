@@ -985,6 +985,10 @@ class SupabaseManager:
                             games.sort(key=lambda x: x.get('plays_count', 0), reverse=True)
                         # created_at is already sorted by the query
                         
+                        # Apply limit after sorting
+                        if limit:
+                            games = games[:limit]
+                        
                         return games
                         
                 except Exception as stats_error:
@@ -1011,17 +1015,10 @@ class SupabaseManager:
             # Query basic games data
             query = client.table('user_data').select('*').eq('data_type', 'html_game')
             
-            # Simple ordering (can only use fields that exist in user_data)
-            if order_by in ['likes_count', 'plays_count']:
-                # If asking for stats ordering but no stats table, order by created_at instead
-                query = query.order('created_at', desc=True)
-            else:
-                query = query.order('created_at', desc=True)
+            # Always order by created_at first, then we'll sort client-side
+            query = query.order('created_at', desc=True)
             
-            # Apply limit if specified
-            if limit:
-                query = query.limit(limit)
-            
+            # Don't apply limit here - we need to sort first, then limit
             response = query.execute()
             
             if response.data:
@@ -1031,6 +1028,17 @@ class SupabaseManager:
                     game['likes_count'] = 0  # Default values when no stats table
                     game['plays_count'] = 0
                     games.append(game)
+                
+                # Apply client-side sorting based on order_by parameter
+                if order_by == 'likes_count':
+                    games.sort(key=lambda x: x.get('likes_count', 0), reverse=True)
+                elif order_by == 'plays_count':
+                    games.sort(key=lambda x: x.get('plays_count', 0), reverse=True)
+                # created_at is already sorted by the query
+                
+                # Apply limit after sorting
+                if limit:
+                    games = games[:limit]
                 
                 return games
                 
@@ -1246,6 +1254,441 @@ class SupabaseManager:
         except Exception as e:
             logger.error(f"Error adding credits for user {user_id}: {e}")
             return False
+
+    def search_games_with_stats(self, search_query: str, limit: int = None, order_by: str = 'created_at') -> List[Dict[str, Any]]:
+        """
+        Search games with statistics by title only
+        
+        Args:
+            search_query: Search term to look for in game titles
+            limit: Maximum number of games to return
+            order_by: Field to order by ('created_at', 'likes_count', 'plays_count')
+            
+        Returns:
+            List of dictionaries with game data and statistics
+        """
+        if not self.is_connected() or not search_query.strip():
+            return []
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                try:
+                    # Search in title field only using ilike for case-insensitive search
+                    query = service_client.table('user_data').select(
+                        '*, game_statistics(likes_count, plays_count, updated_at)'
+                    ).eq('data_type', 'html_game').ilike('title', f'%{search_query}%')
+                    
+                    # Apply ordering
+                    query = query.order('created_at', desc=True)
+                    
+                    # Apply limit if specified
+                    if limit:
+                        query = query.limit(limit)
+                    
+                    response = query.execute()
+                    
+                    if response.data:
+                        # Process the data to flatten statistics
+                        games = []
+                        for game in response.data:
+                            stats = game.get('game_statistics')
+                            if stats and isinstance(stats, dict):
+                                game['likes_count'] = stats.get('likes_count', 0)
+                                game['plays_count'] = stats.get('plays_count', 0)
+                            elif stats and isinstance(stats, list) and len(stats) > 0:
+                                stat = stats[0]
+                                game['likes_count'] = stat.get('likes_count', 0)
+                                game['plays_count'] = stat.get('plays_count', 0)
+                            else:
+                                game['likes_count'] = 0
+                                game['plays_count'] = 0
+                            games.append(game)
+                        
+                        # Client-side sorting for statistics
+                        if order_by == 'likes_count':
+                            games.sort(key=lambda x: x.get('likes_count', 0), reverse=True)
+                        elif order_by == 'plays_count':
+                            games.sort(key=lambda x: x.get('plays_count', 0), reverse=True)
+                        
+                        return games
+                    
+                    return []
+                    
+                except Exception as e:
+                    logger.error(f"Error searching games with stats: {e}")
+                    # Fallback to basic search
+                    return self._search_games_fallback(service_client, search_query, limit, order_by)
+            else:
+                return self._search_games_fallback(self.client, search_query, limit, order_by)
+                
+        except Exception as e:
+            logger.error(f"Error in search_games_with_stats: {e}")
+            return []
+    
+    def _search_games_fallback(self, client, search_query: str, limit: int = None, order_by: str = 'created_at') -> List[Dict[str, Any]]:
+        """
+        Fallback method to search games without statistics when likes system tables don't exist
+        """
+        try:
+            # Search in title field only
+            query = client.table('user_data').select('*').eq('data_type', 'html_game').ilike('title', f'%{search_query}%')
+            
+            # Simple ordering
+            query = query.order('created_at', desc=True)
+            
+            # Apply limit if specified
+            if limit:
+                query = query.limit(limit)
+            
+            response = query.execute()
+            
+            if response.data:
+                # Add default statistics to games
+                games = []
+                for game in response.data:
+                    game['likes_count'] = 0
+                    game['plays_count'] = 0
+                    games.append(game)
+                
+                return games
+                
+            return []
+            
+        except Exception as e:
+            logger.error(f"Fallback search method failed: {e}")
+            return []
+    
+    def search_user_games(self, user_id: str, search_query: str) -> List[Dict[str, Any]]:
+        """
+        Search user's games by title only
+        
+        Args:
+            user_id: ID of the user
+            search_query: Search term to look for in game titles
+            
+        Returns:
+            List of dictionaries with user's game data
+        """
+        if not self.is_connected() or not search_query.strip():
+            return []
+        
+        try:
+            # Use service role key for server-side operations to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('user_data').select('*').eq('user_id', user_id).eq('data_type', 'html_game').ilike('title', f'%{search_query}%').order('created_at', desc=True).execute()
+            else:
+                response = self.client.table('user_data').select('*').eq('user_id', user_id).eq('data_type', 'html_game').ilike('title', f'%{search_query}%').order('created_at', desc=True).execute()
+            
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Error searching user games: {e}")
+            return []
+
+    # ============ NICKNAMES SYSTEM METHODS ============
+    
+    def get_user_nickname(self, user_id: str) -> Optional[str]:
+        """
+        Gets the nickname for a user
+        
+        Args:
+            user_id: ID of the user
+            
+        Returns:
+            User's nickname or None if not found
+        """
+        if not self.is_connected():
+            return None
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('user_nicknames').select('nickname').eq('user_id', user_id).execute()
+            else:
+                response = self.client.table('user_nicknames').select('nickname').eq('user_id', user_id).execute()
+            
+            if response.data and len(response.data) > 0:
+                return response.data[0]['nickname']
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting nickname for user {user_id}: {e}")
+            return None
+    
+    def set_user_nickname(self, user_id: str, nickname: str) -> bool:
+        """
+        Sets or updates the nickname for a user
+        
+        Args:
+            user_id: ID of the user
+            nickname: The nickname to set
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_connected() or not nickname.strip():
+            return False
+        
+        # Validate nickname length and characters
+        nickname = nickname.strip()
+        if len(nickname) < 2 or len(nickname) > 50:
+            logger.error(f"Nickname must be between 2 and 50 characters: {nickname}")
+            return False
+        
+        # Check for valid characters (alphanumeric, spaces, hyphens, underscores)
+        import re
+        if not re.match(r'^[a-zA-Z0-9\s\-_]+$', nickname):
+            logger.error(f"Nickname contains invalid characters: {nickname}")
+            return False
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                # Try to update existing nickname first
+                update_response = service_client.table('user_nicknames').update({
+                    'nickname': nickname,
+                    'updated_at': 'now()'
+                }).eq('user_id', user_id).execute()
+                
+                if update_response.data and len(update_response.data) > 0:
+                    logger.info(f"Updated nickname for user {user_id} to '{nickname}'")
+                    return True
+                
+                # If no existing record, insert new one
+                insert_response = service_client.table('user_nicknames').insert({
+                    'user_id': user_id,
+                    'nickname': nickname
+                }).execute()
+                
+                if insert_response.data and len(insert_response.data) > 0:
+                    logger.info(f"Set nickname for user {user_id} to '{nickname}'")
+                    return True
+                    
+            return False
+            
+        except Exception as e:
+            # Handle duplicate nickname error
+            if 'unique constraint' in str(e).lower() or 'duplicate key' in str(e).lower():
+                logger.error(f"Nickname '{nickname}' is already taken")
+                return False
+            
+            logger.error(f"Error setting nickname for user {user_id}: {e}")
+            return False
+    
+    def delete_user_nickname(self, user_id: str) -> bool:
+        """
+        Deletes the nickname for a user
+        
+        Args:
+            user_id: ID of the user
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_connected():
+            return False
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('user_nicknames').delete().eq('user_id', user_id).execute()
+                
+                logger.info(f"Deleted nickname for user {user_id}")
+                return True
+                    
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error deleting nickname for user {user_id}: {e}")
+            return False
+    
+    def get_nickname_by_user_id(self, user_id: str) -> Optional[str]:
+        """
+        Gets nickname by user ID (alias for get_user_nickname for consistency)
+        
+        Args:
+            user_id: ID of the user
+            
+        Returns:
+            User's nickname or None if not found
+        """
+        return self.get_user_nickname(user_id)
+    
+    def get_all_nicknames(self) -> Dict[str, str]:
+        """
+        Gets all user nicknames as a mapping of user_id to nickname
+        
+        Returns:
+            Dictionary mapping user_id to nickname
+        """
+        if not self.is_connected():
+            return {}
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('user_nicknames').select('user_id, nickname').execute()
+            else:
+                response = self.client.table('user_nicknames').select('user_id, nickname').execute()
+            
+            if response.data:
+                return {item['user_id']: item['nickname'] for item in response.data}
+            return {}
+            
+        except Exception as e:
+            logger.error(f"Error getting all nicknames: {e}")
+            return {}
+    
+    def get_games_with_nicknames(self, limit: int = None, order_by: str = 'created_at') -> List[Dict[str, Any]]:
+        """
+        Gets all uploaded HTML games with user nicknames (if available)
+        Falls back to regular games if nicknames table doesn't exist
+        
+        Args:
+            limit: Maximum number of games to return
+            order_by: Field to order by ('created_at', 'likes_count', 'plays_count')
+            
+        Returns:
+            List of dictionaries with game data and user nicknames
+        """
+        if not self.is_connected():
+            return []
+        
+        try:
+            # For trending games (likes_count ordering), always try to get actual likes data first
+            if order_by == 'likes_count':
+                logger.info("Getting games with actual likes data for trending")
+                games = self._get_games_with_actual_likes(limit)
+            else:
+                # For other orderings, use the stats method
+                games = self.get_games_with_stats(limit, order_by)
+            
+            if not games:
+                return []
+            
+            # Now try to get nicknames for all users and add them to the games
+            try:
+                # Get all nicknames
+                if self.service_role_key:
+                    from supabase import create_client
+                    service_client = create_client(self.url, self.service_role_key)
+                    nicknames_response = service_client.table('user_nicknames').select('user_id, nickname').execute()
+                    
+                    if nicknames_response.data:
+                        # Create a mapping of user_id to nickname
+                        nicknames_map = {item['user_id']: item['nickname'] for item in nicknames_response.data}
+                        
+                        # Add nicknames to games
+                        for game in games:
+                            user_id = game.get('user_id')
+                            if user_id in nicknames_map:
+                                game['user_nickname'] = nicknames_map[user_id]
+                            else:
+                                game['user_nickname'] = None
+                    else:
+                        # No nicknames found, set all to None
+                        for game in games:
+                            game['user_nickname'] = None
+                            
+            except Exception as e:
+                logger.warning(f"Could not fetch nicknames, games will show user IDs: {e}")
+                # Set all nicknames to None if we can't fetch them
+                for game in games:
+                    game['user_nickname'] = None
+            
+            return games
+            
+        except Exception as e:
+            logger.error(f"Error getting games with nicknames: {e}")
+            return []
+    
+    def _get_games_with_actual_likes(self, limit: int = None) -> List[Dict[str, Any]]:
+        """
+        Gets games with actual likes count from game_likes table
+        This is a fallback when the statistics table doesn't work properly
+        
+        Args:
+            limit: Maximum number of games to return
+            
+        Returns:
+            List of dictionaries with game data and actual likes count
+        """
+        if not self.is_connected():
+            return []
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                # Get all games first
+                games_response = service_client.table('user_data').select('*').eq('data_type', 'html_game').execute()
+                
+                if not games_response.data:
+                    logger.info("No games found in database")
+                    return []
+                
+                logger.info(f"Found {len(games_response.data)} games, counting likes...")
+                
+                # Get likes count for each game
+                games = []
+                for game in games_response.data:
+                    game_id = game.get('id')
+                    
+                    try:
+                        # Count likes for this game
+                        likes_response = service_client.table('game_likes').select('id', count='exact').eq('game_id', game_id).execute()
+                        likes_count = likes_response.count if likes_response.count is not None else 0
+                        
+                        # Count plays for this game (if we have a plays tracking system)
+                        plays_count = 0  # Default for now
+                        
+                        game['likes_count'] = likes_count
+                        game['plays_count'] = plays_count
+                        games.append(game)
+                        
+                        if likes_count > 0:
+                            logger.info(f"Game {game.get('title', 'Untitled')} has {likes_count} likes")
+                            
+                    except Exception as e:
+                        logger.warning(f"Error counting likes for game {game_id}: {e}")
+                        # Still add the game with 0 likes
+                        game['likes_count'] = 0
+                        game['plays_count'] = 0
+                        games.append(game)
+                
+                # Sort by likes count (descending)
+                games.sort(key=lambda x: x.get('likes_count', 0), reverse=True)
+                
+                # Apply limit after sorting
+                if limit:
+                    games = games[:limit]
+                
+                logger.info(f"Retrieved {len(games)} games with actual likes data")
+                if games:
+                    logger.info(f"Top game has {games[0].get('likes_count', 0)} likes")
+                return games
+                
+            return []
+            
+        except Exception as e:
+            logger.error(f"Error getting games with actual likes: {e}")
+            return []
 
 # Глобальный экземпляр менеджера Supabase
 supabase_manager = SupabaseManager()
