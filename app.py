@@ -10,6 +10,7 @@ from supabase_client import supabase_manager
 from stripe_client import stripe_manager
 from html_preview_generator import HTMLPreviewGenerator
 import openai
+import stripe
 
 # Load environment variables from .env file
 load_dotenv()
