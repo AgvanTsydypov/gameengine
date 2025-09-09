@@ -1655,8 +1655,8 @@ class SupabaseManager:
                         likes_response = service_client.table('game_likes').select('id', count='exact').eq('game_id', game_id).execute()
                         likes_count = likes_response.count if likes_response.count is not None else 0
                         
-                        # Count plays for this game (if we have a plays tracking system)
-                        plays_count = 0  # Default for now
+                        plays_response = service_client.table('game_statistics').select('plays_count').eq('game_id', game_id).execute()
+                        plays_count = plays_response.data[0]['plays_count'] if plays_response.data and len(plays_response.data) > 0 else 0
                         
                         game['likes_count'] = likes_count
                         game['plays_count'] = plays_count
@@ -1689,6 +1689,47 @@ class SupabaseManager:
         except Exception as e:
             logger.error(f"Error getting games with actual likes: {e}")
             return []
+    
+    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """
+        Gets user by email address
+        
+        Args:
+            email: User's email address
+            
+        Returns:
+            Dictionary with user data or None
+        """
+        if not self.is_connected():
+            logger.error("Supabase not connected")
+            return None
+        
+        try:
+            # Query auth.users table using service role key
+            if not self.service_role_key:
+                logger.error("Service role key not configured")
+                return None
+            
+            # Create a client with service role key for admin operations
+            admin_client = create_client(self.url, self.service_role_key)
+            
+            # Get user from auth.users
+            result = admin_client.auth.admin.list_users()
+            
+            for user in result:
+                if user.email == email:
+                    return {
+                        'id': user.id,
+                        'email': user.email,
+                        'created_at': user.created_at
+                    }
+            
+            logger.warning(f"User with email {email} not found")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting user by email {email}: {e}")
+            return None
 
 # Глобальный экземпляр менеджера Supabase
 supabase_manager = SupabaseManager()

@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}Top Up Credits - Game Generator{% endblock %}
+
+{% block extra_head %}
+<style>
+    .credit-packages {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin: 2rem 0;
+    }
+    
+    .credit-package {
+        background: white;
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+        position: relative;
+        transition: all 0.3s ease;
+    }
+    
+    .credit-package:hover {
+        border-color: #3b82f6;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
+    
+    .credit-package.popular {
+        border-color: #3b82f6;
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        color: white;
+    }
+    
+    .credit-package.popular:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 15px 35px rgba(59, 130, 246, 0.3);
+    }
+    
+    .popular-badge {
+        position: absolute;
+        top: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #f59e0b;
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .package-name {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+    
+    .package-credits {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #3b82f6;
+        margin: 0.5rem 0;
+    }
+    
+    .credit-package.popular .package-credits {
+        color: white;
+    }
+    
+    .package-price {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #059669;
+        margin-bottom: 0.25rem;
+    }
+    
+    .credit-package.popular .package-price {
+        color: white;
+    }
+    
+    .package-price-per-credit {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #6b7280;
+        margin-bottom: 0.5rem;
+    }
+    
+    .credit-package.popular .package-price-per-credit {
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .package-description {
+        color: #6b7280;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+    
+    .credit-package.popular .package-description {
+        color: rgba(255, 255, 255, 0.9);
+    }
+    
+    .payment-link-btn {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        width: 100%;
+        text-decoration: none;
+        display: inline-block;
+    }
+    
+    .payment-link-btn:hover {
+        background: #2563eb;
+        transform: translateY(-1px);
+        color: white;
+        text-decoration: none;
+    }
+    
+    .credit-package.popular .payment-link-btn {
+        background: white;
+        color: #3b82f6;
+    }
+    
+    .credit-package.popular .payment-link-btn:hover {
+        background: #f8fafc;
+        color: #3b82f6;
+    }
+    
+    .current-balance {
+        background: #f0f9ff;
+        border: 1px solid #0ea5e9;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
+    .balance-amount {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #0ea5e9;
+    }
+    
+    .payment-info {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
+    .payment-info h3 {
+        margin: 0 0 0.5rem 0;
+        color: #1f2937;
+        font-size: 1.1rem;
+    }
+    
+    .payment-info p {
+        margin: 0;
+        color: #6b7280;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">Top Up Your Credits</h1>
+            <p class="text-lg text-gray-600">Choose a credit package to continue creating amazing games with AI</p>
+        </div>
+        
+        <!-- Current Balance -->
+        <div class="current-balance">
+            <p class="text-gray-600 mb-2">Current Balance</p>
+            <div class="balance-amount">{{ user_credits }} Credits</div>
+        </div>
+        
+        <!-- Payment Info -->
+        <div class="payment-info">
+            <h3>💳 Secure Payment</h3>
+            <p>All payments are processed securely by Stripe. You'll be redirected to Stripe's secure checkout page.</p>
+        </div>
+        
+        <!-- Credit Packages -->
+        <div class="credit-packages">
+            {% for package in credit_packages %}
+            <div class="credit-package {% if package.popular %}popular{% endif %}">
+                {% if package.popular %}
+                <div class="popular-badge">Most Popular</div>
+                {% endif %}
+                <div class="package-name">{{ package.name }}</div>
+                <div class="package-credits">{{ package.credits }}</div>
+                <div class="package-price">${{ "%.2f"|format(package.price) }}</div>
+                <div class="package-price-per-credit">${{ "%.3f"|format(package.price_per_credit) }}/credit</div>
+                <div class="package-description">{{ package.description }}</div>
+                <a href="{{ package.payment_link_url }}" class="payment-link-btn" target="_blank">
+                    💳 Buy Now
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Additional Info -->
+        <div class="payment-info">
+            <h3>🔄 Automatic Credit Addition</h3>
+            <p>Credits will be automatically added to your account after successful payment. You can start using them immediately!</p>
+        </div>
+    </div>
+</div>
+
+<script>
+// Handle URL parameters for success redirect
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('success') === 'true') {
+    // Show success message
+    const successDiv = document.createElement('div');
+    successDiv.className = 'payment-info';
+    successDiv.style.background = '#d1fae5';
+    successDiv.style.borderColor = '#10b981';
+    successDiv.innerHTML = '<h3>✅ Payment Successful!</h3><p>Your credits have been added to your account. You can now create amazing games!</p>';
+    
+    // Insert at the top
+    const container = document.querySelector('.max-w-6xl');
+    container.insertBefore(successDiv, container.firstChild);
+    
+    // Auto-refresh after 3 seconds to show updated balance
+    setTimeout(() => {
+        window.location.href = '/payment';
+    }, 3000);
+}
+</script>
+{% endblock %}

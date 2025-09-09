@@ -1020,19 +1020,59 @@ def delete_data(data_id):
         logger.error(f"Error deleting data: {e}")
         return jsonify({'error': 'Error deleting data'}), 500
 
-# Stripe integration stub
+# Stripe Payment Links integration for balance top-ups
 @app.route('/payment')
 def payment():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    if stripe_manager.is_configured():
-        # TODO: Implement full Stripe integration
-        flash('Stripe integration configured, but payment functionality is in development', 'info')
-    else:
+    if not stripe_manager.is_configured():
         flash('Stripe not configured. Payment feature will be available after setup', 'warning')
+        return redirect(url_for('my_games'))
     
-    return redirect(url_for('index'))
+    # Get user's current credits
+    user_credits = 0
+    if supabase_manager.is_connected():
+        user_credits = supabase_manager.get_user_credits(str(session['user_id']))
+    
+    # Define credit packages with Payment Links
+    credit_packages = [
+        {
+            'credits': 50, 
+            'price': 5.00, 
+            'price_cents': 500, 
+            'name': 'Starter Pack', 
+            'description': 'Perfect for trying out our AI game generation', 
+            'price_per_credit': 0.10,
+            'payment_link_url': 'https://buy.stripe.com/test_5kQ7sM1Gy6Kj0sz0b88g003'
+        },
+        {
+            'credits': 120, 
+            'price': 10.00, 
+            'price_cents': 1000, 
+            'name': 'Creator Pack', 
+            'description': 'Great for regular game creators', 
+            'popular': True, 
+            'price_per_credit': 0.083,
+            'payment_link_url': 'https://buy.stripe.com/test_8x228s9904Cbcbh4ro8g004'
+        },
+        {
+            'credits': 300, 
+            'price': 20.00, 
+            'price_cents': 2000, 
+            'name': 'Pro Pack', 
+            'description': 'Best value for serious game developers', 
+            'price_per_credit': 0.067,
+            'payment_link_url': 'https://buy.stripe.com/test_4gMdRa2KC3y7grx7DA8g005'
+        }
+    ]
+    
+    authenticated = 'user_id' in session
+    return render_template('payment.html', 
+                         authenticated=authenticated, 
+                         user_credits=user_credits,
+                         credit_packages=credit_packages,
+                         stripe_publishable_key=stripe_manager.publishable_key)
 
 @app.route('/create_payment_intent', methods=['POST'])
 def create_payment_intent():
@@ -1077,6 +1117,83 @@ def create_payment_intent():
     except Exception as e:
         logger.error(f"Error creating payment intent: {e}")
         return jsonify({'error': 'Error creating payment'}), 500
+
+@app.route('/stripe_webhook', methods=['POST'])
+def stripe_webhook():
+    """Handle Stripe webhook events"""
+    payload = request.get_data()
+    sig_header = request.headers.get('Stripe-Signature')
+    
+    if not stripe_manager.verify_webhook_signature(payload, sig_header):
+        logger.error("Invalid webhook signature")
+        return jsonify({'error': 'Invalid signature'}), 400
+    
+    try:
+        event = stripe.Event.construct_from(
+            json.loads(payload), stripe.api_key
+        )
+        
+        # Handle successful payment (Payment Links use checkout.session.completed)
+        if event.type == 'checkout.session.completed':
+            session = event.data.object
+            line_items = stripe.checkout.Session.list_line_items(session.id)
+            
+            # Get the product name to determine credits
+            if line_items.data:
+                product_name = line_items.data[0].description
+                credits = 0
+                
+                # Map product names to credits
+                if '50 Credits' in product_name:
+                    credits = 50
+                elif '120 Credits' in product_name:
+                    credits = 120
+                elif '300 Credits' in product_name:
+                    credits = 300
+                
+                if credits > 0:
+                    # Get customer email to find user
+                    customer_email = session.customer_details.email
+                    if customer_email:
+                        # Find user by email
+                        user = supabase_manager.get_user_by_email(customer_email)
+                        if user:
+                            user_id = user['id']
+                            # Add credits to user account
+                            success = supabase_manager.add_credits(user_id, credits)
+                            if success:
+                                logger.info(f"Added {credits} credits to user {user_id} ({customer_email}) after successful payment")
+                            else:
+                                logger.error(f"Failed to add credits to user {user_id}")
+                        else:
+                            logger.error(f"User not found for email: {customer_email}")
+                    else:
+                        logger.error("No customer email found in checkout session")
+                else:
+                    logger.error(f"Unknown product in checkout session: {product_name}")
+            else:
+                logger.error("No line items found in checkout session")
+        
+        return jsonify({'status': 'success'})
+        
+    except Exception as e:
+        logger.error(f"Error processing webhook: {e}")
+        return jsonify({'error': 'Webhook processing failed'}), 500
+
+@app.route('/payment_success')
+def payment_success():
+    """Handle successful payment redirects"""
+    if 'user_id' not in session:
+        flash('Please log in to view your payment status.', 'error')
+        return redirect(url_for('login'))
+    
+    # Get updated user credits
+    user_credits = 0
+    if supabase_manager.is_connected():
+        user_credits = supabase_manager.get_user_credits(str(session['user_id']))
+    
+    flash('Payment successful! Your credits have been added to your account.', 'success')
+    return redirect(url_for('my_games'))
 
 # ============ LIKES SYSTEM ROUTES ============
 
