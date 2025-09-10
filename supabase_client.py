@@ -1662,8 +1662,7 @@ class SupabaseManager:
                         game['plays_count'] = plays_count
                         games.append(game)
                         
-                        if likes_count > 0:
-                            logger.info(f"Game {game.get('title', 'Untitled')} has {likes_count} likes")
+                        # Log removed to reduce noise
                             
                     except Exception as e:
                         logger.warning(f"Error counting likes for game {game_id}: {e}")
