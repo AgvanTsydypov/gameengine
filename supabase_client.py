@@ -3,6 +3,7 @@ Supabase Client Module
 """
 import os
 import uuid
+import re
 from datetime import datetime
 from supabase import create_client, Client
 from typing import Optional, Dict, Any, List
@@ -13,6 +14,50 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+def sanitize_search_query(query: str) -> str:
+    """
+    Sanitize search query to prevent SQL injection attacks.
+    
+    Args:
+        query: Raw search query from user input
+        
+    Returns:
+        Sanitized query safe for database operations
+    """
+    if not query:
+        return ""
+    
+    # Check for dangerous patterns first - if found, return empty string
+    dangerous_patterns = [
+        r'[\'";]',  # Quotes and semicolons
+        r'--',      # SQL comments
+        r'/\*',     # Block comments
+        r'\b(union|select|insert|update|delete|drop|create|alter|exec|execute|table|from|where|into|values|or|and)\b',  # SQL keywords
+        r'<[^>]*>',  # HTML tags
+        r'javascript:',  # JavaScript protocol
+        r'data:',   # Data protocol
+        r'[=<>!]+', # Comparison operators
+        r'\([^)]*\)',  # Parentheses (often used in SQL injection)
+        r'%[0-9a-fA-F]{2}',  # URL encoded characters
+    ]
+    
+    # If any dangerous pattern is found, return empty string
+    for pattern in dangerous_patterns:
+        if re.search(pattern, query, re.IGNORECASE):
+            return ""
+    
+    # If we get here, the query appears safe
+    # Only allow alphanumeric characters, spaces, and hyphens
+    sanitized = re.sub(r'[^\w\s\-]', '', query)
+    
+    # Limit length to prevent DoS
+    sanitized = sanitized[:1000]
+    
+    # Remove extra whitespace
+    sanitized = ' '.join(sanitized.split())
+    
+    return sanitized.strip()
 
 class SupabaseManager:
     """Class for managing Supabase connection"""
@@ -1278,9 +1323,15 @@ class SupabaseManager:
                 
                 try:
                     # Search in title field only using ilike for case-insensitive search
+                    # Sanitize search query to prevent SQL injection
+                    sanitized_query = sanitize_search_query(search_query)
+                    if not sanitized_query:
+                        # If query is empty after sanitization, return empty results
+                        return []
+                    
                     query = service_client.table('user_data').select(
                         '*, game_statistics(likes_count, plays_count, updated_at)'
-                    ).eq('data_type', 'html_game').ilike('title', f'%{search_query}%')
+                    ).eq('data_type', 'html_game').ilike('title', f'%{sanitized_query}%')
                     
                     # Apply ordering
                     query = query.order('created_at', desc=True)
@@ -1335,7 +1386,13 @@ class SupabaseManager:
         """
         try:
             # Search in title field only
-            query = client.table('user_data').select('*').eq('data_type', 'html_game').ilike('title', f'%{search_query}%')
+            # Sanitize search query to prevent SQL injection
+            sanitized_query = sanitize_search_query(search_query)
+            if not sanitized_query:
+                # If query is empty after sanitization, return empty results
+                return []
+            
+            query = client.table('user_data').select('*').eq('data_type', 'html_game').ilike('title', f'%{sanitized_query}%')
             
             # Simple ordering
             query = query.order('created_at', desc=True)
@@ -1377,13 +1434,19 @@ class SupabaseManager:
             return []
         
         try:
+            # Sanitize search query to prevent SQL injection
+            sanitized_query = sanitize_search_query(search_query)
+            if not sanitized_query:
+                # If query is empty after sanitization, return empty results
+                return []
+            
             # Use service role key for server-side operations to bypass RLS
             if self.service_role_key:
                 from supabase import create_client
                 service_client = create_client(self.url, self.service_role_key)
-                response = service_client.table('user_data').select('*').eq('user_id', user_id).eq('data_type', 'html_game').ilike('title', f'%{search_query}%').order('created_at', desc=True).execute()
+                response = service_client.table('user_data').select('*').eq('user_id', user_id).eq('data_type', 'html_game').ilike('title', f'%{sanitized_query}%').order('created_at', desc=True).execute()
             else:
-                response = self.client.table('user_data').select('*').eq('user_id', user_id).eq('data_type', 'html_game').ilike('title', f'%{search_query}%').order('created_at', desc=True).execute()
+                response = self.client.table('user_data').select('*').eq('user_id', user_id).eq('data_type', 'html_game').ilike('title', f'%{sanitized_query}%').order('created_at', desc=True).execute()
             
             return response.data if response.data else []
         except Exception as e:

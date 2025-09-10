@@ -245,19 +245,28 @@ class StripeManager:
             True если подпись верна, False в противном случае
         """
         if not self.webhook_secret:
-            logger.error("Webhook секрет не настроен")
+            logger.error("Webhook секрет не настроен - webhook verification disabled")
+            logger.error("Set STRIPE_WEBHOOK_SECRET environment variable to enable webhook verification")
+            return False
+        
+        if not signature:
+            logger.error("Missing Stripe-Signature header")
             return False
         
         try:
             stripe.Webhook.construct_event(
                 payload, signature, self.webhook_secret
             )
+            logger.info("Webhook signature verified successfully")
             return True
         except ValueError as e:
-            logger.error(f"Неверный payload: {e}")
+            logger.error(f"Invalid payload: {e}")
             return False
         except stripe.error.SignatureVerificationError as e:
-            logger.error(f"Неверная подпись: {e}")
+            logger.error(f"Webhook signature verification failed: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Error during webhook signature verification: {e}")
             return False
 
 # Глобальный экземпляр менеджера Stripe

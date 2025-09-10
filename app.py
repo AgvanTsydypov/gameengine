@@ -4,6 +4,7 @@ import os
 import logging
 import json
 import tempfile
+import re
 from dotenv import load_dotenv
 from config import config
 from supabase_client import supabase_manager
@@ -18,6 +19,61 @@ load_dotenv()
 # Logging configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def validate_search_input(search_query: str) -> str:
+    """
+    Validate and sanitize search input to prevent SQL injection and XSS attacks.
+    
+    Args:
+        search_query: Raw search query from user input
+        
+    Returns:
+        Sanitized search query safe for database operations
+    """
+    if not search_query:
+        return ""
+    
+    # Remove or escape dangerous characters
+    dangerous_patterns = [
+        r'[\'";]',  # Remove quotes and semicolons
+        r'--.*$',   # Remove SQL comments
+        r'/\*.*?\*/',  # Remove block comments
+        r'\b(union|select|insert|update|delete|drop|create|alter|exec|execute)\b',  # Remove SQL keywords
+        r'<[^>]*>',  # Remove HTML tags to prevent XSS
+        r'javascript:',  # Remove javascript: protocol
+        r'data:',  # Remove data: protocol
+    ]
+    
+    sanitized = search_query
+    for pattern in dangerous_patterns:
+        sanitized = re.sub(pattern, '', sanitized, flags=re.IGNORECASE)
+    
+    # Limit length to prevent DoS
+    sanitized = sanitized[:1000]
+    
+    # Remove extra whitespace
+    sanitized = ' '.join(sanitized.split())
+    
+    return sanitized.strip()
+
+def validate_sort_input(sort_by: str) -> str:
+    """
+    Validate sort parameter to prevent SQL injection.
+    
+    Args:
+        sort_by: Sort parameter from user input
+        
+    Returns:
+        Validated sort parameter
+    """
+    # Whitelist of allowed sort fields
+    allowed_sorts = ['likes_count', 'plays_count', 'created_at', 'title']
+    
+    if sort_by in allowed_sorts:
+        return sort_by
+    
+    # Default to safe sort
+    return 'likes_count'
 
 app = Flask(__name__)
 
@@ -694,8 +750,8 @@ def games():
     """Games page - displays all uploaded games from the database with likes and stats"""
     uploaded_games = []
     user_liked_games = []
-    search_query = request.args.get('search', '').strip()
-    sort_by = request.args.get('sort', 'likes_count').strip()
+    search_query = validate_search_input(request.args.get('search', '').strip())
+    sort_by = validate_sort_input(request.args.get('sort', 'likes_count').strip())
     
     # Validate sort parameter
     valid_sorts = ['likes_count', 'created_at', 'plays_count']
@@ -788,7 +844,7 @@ def my_games():
         flash('Please log in to view your games.', 'error')
         return redirect(url_for('index'))
     
-    search_query = request.args.get('search', '').strip()
+    search_query = validate_search_input(request.args.get('search', '').strip())
     
     try:
         # Get user's uploaded games from Supabase
@@ -971,6 +1027,14 @@ def save_data():
     data_content = request.form.get('data_content', '')
     filename = request.form.get('filename', '')
     
+    # Validate form inputs
+    if data_type not in ['text', 'html_game']:
+        return jsonify({'error': 'Invalid data type'}), 400
+    
+    # Sanitize filename
+    if filename:
+        filename = re.sub(r'[^\w\-_\.]', '', filename)[:255]  # Only allow alphanumeric, hyphens, underscores, dots
+    
     if not data_content:
         return jsonify({'error': 'Content cannot be empty'}), 400
     
@@ -1125,8 +1189,13 @@ def stripe_webhook():
     payload = request.get_data()
     sig_header = request.headers.get('Stripe-Signature')
     
+    # Log webhook attempt
+    logger.info(f"Webhook received: {request.method} {request.url}")
+    logger.info(f"Headers: {dict(request.headers)}")
+    
     if not stripe_manager.verify_webhook_signature(payload, sig_header):
-        logger.error("Invalid webhook signature")
+        logger.error("Webhook signature verification failed - rejecting request")
+        logger.error("Check STRIPE_WEBHOOK_SECRET environment variable")
         return jsonify({'error': 'Invalid signature'}), 400
     
     try:
