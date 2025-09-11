@@ -510,7 +510,7 @@ def refine_game_with_ai(instruction: str, current_html: str, model_id: str = "gp
 
 # User management functions via Supabase
 def create_user(email, password):
-    """Creates a new user in Supabase Auth"""
+    """Creates a new user in Supabase Auth with email confirmation support"""
     if not supabase_manager.is_connected():
         logger.error("Supabase not connected for user creation")
         return None
@@ -522,22 +522,41 @@ def create_user(email, password):
         from supabase import create_client
         auth_client = create_client(supabase_manager.url, supabase_manager.key)
         
-        # Create user in auth.users with email and password only
+        # Create user in auth.users with email and password
+        # Note: If email confirmation is enabled, user will need to confirm email before login
         auth_response = auth_client.auth.sign_up({
             "email": email,
-            "password": password
+            "password": password,
+            "options": {
+                "email_redirect_to": "http://localhost:8888/callback"  # Redirect after email confirmation
+            }
         })
         
         logger.info(f"Auth response: {auth_response}")
         
         if auth_response.user:
             logger.info(f"User {email} successfully created in auth.users with ID: {auth_response.user.id}")
-            # Sign out from the auth client to prevent session persistence
-            auth_client.auth.sign_out()
-            return {
-                'user': auth_response.user,
-                'user_id': auth_response.user.id
-            }
+            
+            # Check if email confirmation is required
+            if hasattr(auth_response, 'session') and auth_response.session is None:
+                logger.info(f"Email confirmation required for user {email}")
+                # Sign out from the auth client to prevent session persistence
+                auth_client.auth.sign_out()
+                return {
+                    'user': auth_response.user,
+                    'user_id': auth_response.user.id,
+                    'email_confirmation_required': True,
+                    'message': 'Please check your email and click the confirmation link to complete registration.'
+                }
+            else:
+                # User is immediately confirmed (auto-confirm enabled)
+                logger.info(f"User {email} is immediately confirmed")
+                auth_client.auth.sign_out()
+                return {
+                    'user': auth_response.user,
+                    'user_id': auth_response.user.id,
+                    'email_confirmation_required': False
+                }
         else:
             logger.error(f"Failed to create user - no user in response: {auth_response}")
             return None
@@ -547,7 +566,29 @@ def create_user(email, password):
         logger.error(f"Exception type: {type(e)}")
         if hasattr(e, 'response'):
             logger.error(f"Response: {e.response}")
-        return None
+        
+        # Handle specific error cases
+        error_str = str(e).lower()
+        if "email already registered" in error_str:
+            return {
+                'error': 'Email already registered. Please try logging in instead.',
+                'error_type': 'email_exists'
+            }
+        elif "database error" in error_str:
+            return {
+                'error': 'Database error. Please try again later.',
+                'error_type': 'database_error'
+            }
+        elif "invalid email" in error_str:
+            return {
+                'error': 'Invalid email address format.',
+                'error_type': 'invalid_email'
+            }
+        else:
+            return {
+                'error': 'Registration failed. Please try again.',
+                'error_type': 'unknown_error'
+            }
 
 def authenticate_user(email, password):
     """Authenticates user via Supabase Auth"""
@@ -586,7 +627,29 @@ def authenticate_user(email, password):
         logger.error(f"Exception type: {type(e)}")
         if hasattr(e, 'response'):
             logger.error(f"Response: {e.response}")
-        return None
+        
+        # Handle specific error cases
+        error_str = str(e).lower()
+        if "email not confirmed" in error_str or "email_not_confirmed" in error_str:
+            return {
+                'error': 'Please check your email and click the confirmation link to complete your registration.',
+                'error_type': 'email_not_confirmed'
+            }
+        elif "invalid login credentials" in error_str or "invalid_credentials" in error_str:
+            return {
+                'error': 'Invalid email or password.',
+                'error_type': 'invalid_credentials'
+            }
+        elif "too many requests" in error_str:
+            return {
+                'error': 'Too many login attempts. Please try again later.',
+                'error_type': 'too_many_requests'
+            }
+        else:
+            return {
+                'error': 'Login failed. Please try again.',
+                'error_type': 'unknown_error'
+            }
 
 # Routes
 @app.route('/')
@@ -670,29 +733,52 @@ def register():
                 flash(error_msg, 'error')
                 return render_template('register.html')
         
+        # Check password strength
+        if len(password) < 6:
+            error_msg = 'Password must be at least 6 characters long!'
+            # Check if this is an AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                return jsonify({'success': False, 'error': error_msg}), 400
+            else:
+                flash(error_msg, 'error')
+                return render_template('register.html')
+        
         # Create new user in Supabase
         try:
             result = create_user(email, password)
-            if result:
-                # Ensure user gets 2 credits upon registration
-                user_id = result['user_id']
-                if supabase_manager.is_connected():
-                    # Create credits record for new user (should be automatic via trigger, but ensure it exists)
-                    current_credits = supabase_manager.get_user_credits(user_id)
-                    if current_credits == 0:
-                        # If no credits record exists, create one with 2 credits
-                        supabase_manager.create_user_credits_record(user_id, 2)
-                        logger.info(f"Created credits record for new user {user_id} with 2 credits")
-                
-                success_msg = 'Registration successful! You can now log in.'
-                # Check if this is an AJAX request
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
-                    return jsonify({'success': True, 'message': success_msg})
+            if result and 'error' not in result:
+                # Check if email confirmation is required
+                if result.get('email_confirmation_required', False):
+                    success_msg = result.get('message', 'Registration successful! Please check your email and click the confirmation link to complete registration.')
+                    # Check if this is an AJAX request
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                        return jsonify({'success': True, 'message': success_msg, 'email_confirmation_required': True})
+                    else:
+                        flash(success_msg, 'info')
+                        return render_template('register.html', show_email_confirmation=True)
                 else:
-                    flash(success_msg, 'success')
-                    return redirect(url_for('login'))
+                    # User is immediately confirmed (auto-confirm enabled)
+                    user_id = result['user_id']
+                    # Note: Credits will be created automatically via database trigger
+                    # If trigger doesn't exist, user will get 0 credits initially
+                    logger.info(f"User {user_id} registered successfully")
+                    
+                    success_msg = 'Registration successful! You can now log in.'
+                    # Check if this is an AJAX request
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                        return jsonify({'success': True, 'message': success_msg})
+                    else:
+                        flash(success_msg, 'success')
+                        return redirect(url_for('login'))
             else:
-                error_msg = 'Registration failed. A user with this email may already exist.'
+                # Handle error responses
+                if result and 'error' in result:
+                    error_msg = result['error']
+                    error_type = result.get('error_type', 'unknown')
+                    logger.warning(f"Registration error for {email}: {error_msg} (type: {error_type})")
+                else:
+                    error_msg = 'Registration failed. A user with this email may already exist.'
+                
                 # Check if this is an AJAX request
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
                     return jsonify({'success': False, 'error': error_msg}), 400
@@ -709,6 +795,41 @@ def register():
     
     return render_template('register.html')
 
+@app.route('/callback')
+def auth_callback():
+    """Handle email confirmation callback from Supabase"""
+    try:
+        # Get the access token from the URL parameters
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        
+        if access_token:
+            # Set the session with the tokens
+            session['access_token'] = access_token
+            session['refresh_token'] = refresh_token
+            
+            # Get user info
+            if supabase_manager.is_connected():
+                # Create a temporary client with the access token
+                from supabase import create_client
+                temp_client = create_client(supabase_manager.url, supabase_manager.key)
+                temp_client.auth.set_session(access_token, refresh_token)
+                
+                user = temp_client.auth.get_user()
+                if user and user.user:
+                    session['user_id'] = user.user.id
+                    session['user_email'] = user.user.email
+                    flash('Email confirmed successfully! You are now logged in.', 'success')
+                    return redirect(url_for('index'))
+        
+        flash('Email confirmation failed. Please try again.', 'error')
+        return redirect(url_for('login'))
+        
+    except Exception as e:
+        logger.error(f"Error in auth callback: {e}")
+        flash('Email confirmation failed. Please try again.', 'error')
+        return redirect(url_for('login'))
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -718,7 +839,8 @@ def login():
         # Authenticate user
         auth_result = authenticate_user(email, password)
         
-        if auth_result:
+        if auth_result and 'error' not in auth_result:
+            # Successful authentication
             session['user_id'] = auth_result['user'].id
             session['email'] = auth_result['user'].email
             
@@ -730,11 +852,19 @@ def login():
                 flash('Successfully logged in!', 'success')
                 return redirect(url_for('index'))
         else:
+            # Handle authentication errors
+            if auth_result and 'error' in auth_result:
+                error_msg = auth_result['error']
+                error_type = auth_result.get('error_type', 'unknown')
+                logger.warning(f"Login error for {email}: {error_msg} (type: {error_type})")
+            else:
+                error_msg = 'Invalid email or password!'
+            
             # Check if this is an AJAX request
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
-                return jsonify({'success': False, 'error': 'Invalid email or password!'}), 400
+                return jsonify({'success': False, 'error': error_msg}), 400
             else:
-                flash('Invalid email or password!', 'error')
+                flash(error_msg, 'error')
     
     return render_template('login.html')
 
