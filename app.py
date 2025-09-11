@@ -528,7 +528,7 @@ def create_user(email, password):
             "email": email,
             "password": password,
             "options": {
-                "email_redirect_to": "http://localhost:8888/callback"  # Redirect after email confirmation
+                "email_redirect_to": f"{app.config['BASE_URL']}/callback"  # Redirect after email confirmation
             }
         })
         

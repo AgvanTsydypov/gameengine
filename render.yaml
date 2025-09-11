@@ -28,4 +28,6 @@ services:
         value: 8000
       - key: RENDER
         value: true
+      - key: BASE_URL
+        value: https://glitchpeach.com
     healthCheckPath: /

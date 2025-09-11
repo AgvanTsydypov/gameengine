@@ -123,10 +123,18 @@ def check_auth_settings():
     """Provide guidance on auth settings"""
     logger.info("⚙️  Authentication Settings Checklist:")
     logger.info("   Go to your Supabase dashboard > Authentication > Settings")
-    logger.info("   1. ✅ Site URL: http://localhost:5000 (or your app URL)")
+    logger.info("   For DEVELOPMENT:")
+    logger.info("   1. ✅ Site URL: http://localhost:5000")
     logger.info("   2. ✅ Auto Confirm: Enable for development")
     logger.info("   3. ✅ Email Confirmations: Disable for development") 
     logger.info("   4. ✅ Phone Confirmations: Disable for development")
+    logger.info("   5. ✅ Redirect URLs: Add http://localhost:5000/callback")
+    logger.info("   For PRODUCTION (glitchpeach.com):")
+    logger.info("   1. ✅ Site URL: https://glitchpeach.com")
+    logger.info("   2. ✅ Auto Confirm: Disable (enable email confirmations)")
+    logger.info("   3. ✅ Email Confirmations: Enable")
+    logger.info("   4. ✅ Phone Confirmations: Disable")
+    logger.info("   5. ✅ Redirect URLs: Add https://glitchpeach.com/callback")
 
 def check_database_schema():
     """Check if database schema is set up correctly"""
