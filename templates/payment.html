@@ -4,370 +4,274 @@
 
 {% block extra_head %}
 <style>
-    .credit-packages {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        margin: 2rem 0;
-        max-width: 600px;
-        margin-left: auto;
-        margin-right: auto;
-    }
-    
-    .credit-package {
-        background: white;
-        border: 4px solid #d1d5db;
-        border-radius: 20px;
-        padding: 2rem;
-        text-align: center;
-        position: relative;
-        transition: all 0.3s ease;
-        cursor: pointer;
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-        min-height: 200px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        margin: 0.5rem 0;
-    }
-    
-    .credit-package:hover {
-        border-color: #3b82f6;
-        transform: translateY(-4px);
-        box-shadow: 0 16px 32px rgba(59, 130, 246, 0.2);
-        background: #f8fafc;
-    }
-    
-    .credit-package.selected {
-        border-color: #10b981;
-        border-width: 6px;
-        background: white;
-        color: #1f2937;
-        transform: translateY(-4px);
-        box-shadow: 0 20px 40px rgba(16, 185, 129, 0.3);
-    }
-    
-    .credit-package.popular {
-        border-color: #f59e0b;
-        border-width: 5px;
-        background: white;
-        color: #1f2937;
-        box-shadow: 0 12px 24px rgba(245, 158, 11, 0.2);
-    }
-    
-    .credit-package.popular:hover {
-        border-color: #f59e0b;
-        background: #fef3c7;
-        transform: translateY(-4px);
-        box-shadow: 0 16px 32px rgba(245, 158, 11, 0.3);
-    }
-    
-    .credit-package.popular.selected {
-        border-color: #10b981;
-        border-width: 6px;
-        background: white;
-        color: #1f2937;
-        box-shadow: 0 20px 40px rgba(16, 185, 129, 0.3);
-    }
-    
-    .popular-badge {
-        position: absolute;
-        top: -15px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #f59e0b;
-        color: white;
-        padding: 0.5rem 1.5rem;
-        border-radius: 25px;
-        font-size: 0.85rem;
-        font-weight: 700;
-        z-index: 10;
-        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
-        border: 2px solid white;
-    }
-    
-    .credit-package.selected .popular-badge {
-        background: #10b981;
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-        border: 2px solid white;
-    }
-    
-    .package-name {
-        font-size: 1.3rem;
-        font-weight: 700;
-        margin-bottom: 0.75rem;
-        margin-top: 0.5rem;
-    }
-    
-    .package-credits {
-        font-size: 2.5rem;
-        font-weight: 800;
-        color: #3b82f6;
-        margin: 0.5rem 0;
-    }
-    
-    .credit-package.selected .package-credits {
-        color: #10b981;
-    }
-    
-    .credit-package.popular .package-credits {
-        color: #f59e0b;
-    }
-    
-    .package-price {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #059669;
-        margin-bottom: 0.5rem;
-    }
-    
-    .credit-package.selected .package-price {
-        color: #10b981;
-    }
-    
-    .credit-package.popular .package-price {
-        color: #f59e0b;
-    }
-    
-    .package-price-per-credit {
-        font-size: 0.9rem;
-        font-weight: 500;
-        color: #6b7280;
-        margin-bottom: 0.75rem;
-    }
-    
-    .credit-package.selected .package-price-per-credit {
-        color: #10b981;
-    }
-    
-    .credit-package.popular .package-price-per-credit {
-        color: #f59e0b;
-    }
-    
-    .package-description {
-        color: #6b7280;
-        font-size: 0.95rem;
-        margin-bottom: 0.5rem;
-        line-height: 1.4;
-    }
-    
-    .credit-package.selected .package-description {
-        color: #374151;
-    }
-    
-    .credit-package.popular .package-description {
-        color: #374151;
-    }
-    
-    .buy-button-container {
-        text-align: center;
-        margin: 2rem 0;
-    }
-    
-    .buy-button {
-        background: #3b82f6;
-        color: white;
-        border: none;
-        padding: 1rem 3rem;
-        border-radius: 12px;
-        font-weight: 700;
-        font-size: 1.1rem;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        text-decoration: none;
-        display: inline-block;
-        min-width: 200px;
-    }
-    
-    .buy-button:hover:not(:disabled) {
-        background: #2563eb;
-        transform: translateY(-2px);
-        box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
-    }
-    
-    .buy-button:disabled {
-        background: #9ca3af;
-        cursor: not-allowed;
-        transform: none;
-        box-shadow: none;
-    }
-    
-    .current-balance {
-        background: #f0f9ff;
-        border: 1px solid #0ea5e9;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 2rem;
-        text-align: center;
-    }
-    
-    .balance-amount {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #0ea5e9;
-    }
-    
-    .payment-info {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 2rem;
-        text-align: center;
-    }
-    
-    .payment-info h3 {
-        margin: 0 0 0.5rem 0;
-        color: #1f2937;
-        font-size: 1.1rem;
-    }
-    
-    .payment-info p {
-        margin: 0;
-        color: #6b7280;
-        font-size: 0.9rem;
-    }
-    
-    .selection-info {
-        background: #fef3c7;
-        border: 1px solid #f59e0b;
-        border-radius: 8px;
-        padding: 1rem;
-        margin: 1rem 0;
-        text-align: center;
-        display: none;
-    }
-    
-    .selection-info.show {
-        display: block;
-    }
+  /* ==== GRID ==== */
+  .credit-packages{
+    display:grid;
+    gap:24px;
+    grid-template-columns:1fr;
+    max-width:1200px;margin:2rem auto;padding:0 1rem;
+  }
+  @media (min-width:640px){ .credit-packages{ grid-template-columns:repeat(2,1fr);} }
+  @media (min-width:1024px){ .credit-packages{ grid-template-columns:repeat(4,1fr);} }
+
+  /* ==== DARK CARD ==== */
+  .credit-package{
+    cursor:pointer;
+    border-radius:8px;
+    background:#0f1117;                        /* dark card background */
+    color:#e6e6ea;                            /* light text */
+    padding:24px;
+    box-shadow:0 4px 6px rgba(0,0,0,.3), 0 0 0 2px #1a1d27;
+    border:2px solid #1a1d27;                 /* dark border */
+    transition:all .2s ease;
+    position:relative;
+    display:flex;flex-direction:column;min-height:280px;
+    outline:none;
+  }
+  .credit-package:hover{
+    border-color:#1ee4ff;                     /* cyber cyan hover */
+    box-shadow:0 8px 25px rgba(0,0,0,.4), 0 0 0 2px #1ee4ff;
+    transform:translateY(-2px);
+  }
+  .credit-package:focus-visible{ 
+    outline:2px solid #9d7bff; 
+    outline-offset:2px; 
+  }
+
+  /* ==== SELECTED STATE (cyber glow) ==== */
+  .credit-package.selected{
+    border:2px solid #9d7bff;                 /* neon purple border */
+    box-shadow:0 0 20px rgba(157,123,255,.3), 0 0 0 3px rgba(157,123,255,.2);
+    background:#1a1d27;                       /* slightly lighter dark */
+    transform:translateY(-4px);
+  }
+
+  /* ==== BADGES ==== */
+  .popular-badge{
+    position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+    background:#ff4d8a;color:#fff;padding:6px 16px;border-radius:20px;
+    font-size:12px;font-weight:700;z-index:10;border:2px solid #0f1117;
+    box-shadow:0 4px 12px rgba(255,77,138,.6);
+  }
+  .credit-package.selected .popular-badge{
+    background:#9d7bff;box-shadow:0 4px 12px rgba(157,123,255,.6);
+    border-color:#1a1d27;
+  }
+  
+  .discount-badge{
+    background:#1ee4ff;color:#0a0b10;padding:8px 16px;border-radius:20px;
+    font-size:12px;font-weight:700;border:2px solid #1a1d27;
+    box-shadow:0 4px 12px rgba(30,228,255,.6);
+    text-transform:uppercase;letter-spacing:0.5px;
+    margin-top:auto;margin-bottom:8px;text-align:center;
+    display:inline-block;width:fit-content;align-self:center;
+  }
+  .credit-package.selected .discount-badge{
+    background:#9d7bff;color:#fff;box-shadow:0 4px 12px rgba(157,123,255,.6);
+    border-color:#1a1d27;
+  }
+
+  /* ==== TYPO ==== */
+  .package-name{font-size:1.125rem;font-weight:600;color:#e6e6ea;margin-bottom:8px;}
+  .package-credits{font-size:.875rem;color:#1ee4ff;margin-bottom:12px;font-weight:600;}
+  
+  .package-pricing{margin-bottom:8px;}
+  .package-price{font-size:1rem;color:#e6e6ea;font-weight:600;margin:0;}
+  .package-original-price{
+    font-size:.8rem;color:#98a0ab;text-decoration:line-through;margin-right:8px;
+  }
+  .package-savings{
+    font-size:.75rem;color:#1ee4ff;font-weight:600;margin-top:4px;
+  }
+
+  /* ==== BUY BUTTON ==== */
+  .buy-button-container{text-align:center;margin:2rem 0;}
+  .buy-button{
+    width:100%;border-radius:8px;background:#9d7bff;color:#fff;padding:14px 24px;
+    border:2px solid #9d7bff;font-weight:600;font-size:1rem;cursor:pointer;transition:all .2s ease;
+    text-decoration:none;display:inline-block;text-transform:uppercase;letter-spacing:1px;
+    box-shadow:0 4px 12px rgba(157,123,255,.3);
+  }
+  .buy-button:hover:not(:disabled){ 
+    background:#1ee4ff; 
+    border-color:#1ee4ff;
+    box-shadow:0 6px 20px rgba(30,228,255,.4);
+    transform:translateY(-2px);
+  }
+  .buy-button:disabled{ 
+    background:#1a1d27; 
+    border-color:#1a1d27;
+    color:#98a0ab;
+    cursor:not-allowed; 
+    box-shadow:none;
+    transform:none;
+  }
+
+  /* ==== DARK INFO BLOCKS ==== */
+  .current-balance{
+    background:#1a1d27;border:2px solid #1ee4ff;border-radius:8px;padding:1rem;margin-bottom:2rem;text-align:center;
+    box-shadow:0 0 15px rgba(30,228,255,.2);
+  }
+  .balance-amount{font-size:1.5rem;font-weight:700;color:#1ee4ff;}
+  
+  .payment-info{
+    background:#0f1117;border:2px solid #1a1d27;border-radius:8px;padding:1rem;margin-bottom:2rem;text-align:center;
+    box-shadow:0 2px 8px rgba(0,0,0,.3);
+  }
+  .payment-info h3{margin:0 0 .5rem 0;color:#e6e6ea;font-size:1.1rem;}
+  .payment-info p{margin:0;color:#98a0ab;font-size:.9rem;}
+
+  .selection-info{
+    background:#1a1d27;border:2px solid #9d7bff;border-radius:8px;padding:1rem;margin:1rem 0;text-align:center;display:none;
+    box-shadow:0 0 15px rgba(157,123,255,.2);
+  }
+  .selection-info h3{color:#e6e6ea;margin:0 0 .5rem 0;}
+  .selection-info p{color:#98a0ab;margin:0;}
+  .selection-info.show{display:block;}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
-    <div class="max-w-6xl mx-auto">
-        <div class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-gray-900 mb-4">Top Up Your Credits</h1>
-            <p class="text-lg text-gray-600">Choose a credit package to continue creating amazing games with AI</p>
-        </div>
-        
-        <!-- Current Balance -->
-        <div class="current-balance">
-            <p class="text-gray-600 mb-2">Current Balance</p>
-            <div class="balance-amount">{{ user_credits }} Credits</div>
-        </div>
-        
-        <!-- Payment Info -->
-        <div class="payment-info">
-            <h3>💳 Secure Payment</h3>
-            <p>All payments are processed securely by Stripe. You'll be redirected to Stripe's secure checkout page.</p>
-        </div>
-        
-        <!-- Credit Packages -->
-        <div class="credit-packages">
-            {% for package in credit_packages %}
-            <div class="credit-package {% if package.popular %}popular{% endif %}" 
-                 data-package-name="{{ package.name }}" 
-                 data-payment-url="{{ package.payment_link_url }}" 
-                 data-credits="{{ package.credits }}" 
-                 data-price="{{ package.price }}"
-                 onclick="selectPackage(this)">
-                {% if package.popular %}
-                <div class="popular-badge">Most Popular</div>
-                {% endif %}
-                <div class="package-name">{{ package.name }}</div>
-                <div class="package-credits">{{ package.credits }} Credits</div>
-                <div class="package-price">${{ "%.2f"|format(package.price) }}</div>
-                <div class="package-price-per-credit">${{ "%.3f"|format(package.price_per_credit) }} per credit</div>
-                <div class="package-description">{{ package.description }}</div>
-            </div>
-            {% endfor %}
-        </div>
-        
-        <!-- Selection Info -->
-        <div class="selection-info" id="selection-info">
-            <h3>Selected Package</h3>
-            <p id="selected-package-info">Please select a package above</p>
-        </div>
-        
-        <!-- Buy Button -->
-        <div class="buy-button-container">
-            <button class="buy-button" id="buy-button" disabled onclick="buySelectedPackage()">
-                💳 Select a Package First
-            </button>
-        </div>
-        
-        <!-- Additional Info -->
-        <div class="payment-info">
-            <h3>🔄 Automatic Credit Addition</h3>
-            <p>Credits will be automatically added to your account after successful payment. You can start using them immediately!</p>
-        </div>
+  <div class="max-w-6xl mx-auto">
+    <div class="text-center mb-8">
+      <h1 style="color:#e6e6ea;font-size:2.5rem;font-weight:bold;margin-bottom:1rem;text-shadow:0 0 10px rgba(157,123,255,.5);">Top Up Your Credits</h1>
+      <p style="color:#98a0ab;font-size:1.125rem;">Choose a credit package to continue creating amazing games with AI</p>
     </div>
+
+    <!-- Current Balance -->
+    <div class="current-balance">
+      <p style="color:#98a0ab;margin-bottom:0.5rem;">Current Balance</p>
+      <div class="balance-amount">{{ user_credits }} Credits</div>
+    </div>
+
+    <!-- Payment Info -->
+    <div class="payment-info">
+      <h3>💳 Secure Payment</h3>
+      <p>All payments are processed securely by Stripe. You'll be redirected to Stripe's secure checkout page.</p>
+    </div>
+
+     <!-- Credit Packages -->
+     <div class="credit-packages" role="radiogroup" aria-label="Credit packages">
+       {% for package in credit_packages %}
+       <article
+         class="credit-package {% if package.popular %}popular{% endif %}"
+         role="radio" aria-checked="false" tabindex="0"
+         data-package-id="{{ loop.index0 }}"
+         data-package-name="{{ package.name }}"
+         data-payment-url="{{ package.payment_link_url }}"
+         data-credits="{{ package.credits }}"
+         data-price="{{ package.price }}"
+         onclick="selectPackage(this)"
+         onkeydown="handleKeyDown(event, this)">
+         
+         {% if package.popular %}
+           <div class="popular-badge">Most Popular</div>
+         {% endif %}
+         
+         <h3 class="package-name">{{ package.name }}</h3>
+         <p class="package-credits">{{ package.credits }} Credits</p>
+         
+         <div class="package-pricing">
+           {% if package.discount_percent > 0 %}
+             <div>
+               <span class="package-original-price">${{ "%.2f"|format(package.original_price) }}</span>
+               <span class="package-price">${{ "%.2f"|format(package.price) }}</span>
+             </div>
+             <div class="package-savings">Save ${{ "%.2f"|format(package.savings) }}</div>
+           {% else %}
+             <div class="package-price">${{ "%.2f"|format(package.price) }}</div>
+           {% endif %}
+         </div>
+         
+         {% if package.discount_percent > 0 %}
+           <div class="discount-badge">{{ package.discount_percent }}% OFF</div>
+         {% endif %}
+       </article>
+       {% endfor %}
+     </div>
+
+    <!-- Selection Info -->
+    <div class="selection-info" id="selection-info">
+      <h3>Selected Package</h3>
+      <p id="selected-package-info">Please select a package above</p>
+    </div>
+
+    <!-- Buy Button -->
+    <div class="buy-button-container">
+      <button class="buy-button" id="buy-button" disabled onclick="buySelectedPackage()">
+        💳 Select a Package First
+      </button>
+    </div>
+
+    <!-- Additional Info -->
+    <div class="payment-info">
+      <h3>🔄 Automatic Credit Addition</h3>
+      <p>Credits will be automatically added to your account after successful payment. You can start using them immediately!</p>
+    </div>
+  </div>
 </div>
 
 <script>
-let selectedPackage = null;
+  let selectedPackage = null;
 
-function selectPackage(element) {
-    // Remove previous selections
-    document.querySelectorAll('.credit-package').forEach(pkg => {
-        pkg.classList.remove('selected');
+  function selectPackage(el){
+    document.querySelectorAll('.credit-package').forEach(pkg=>{
+      pkg.classList.remove('selected');
+      pkg.setAttribute('aria-checked','false');
+      pkg.setAttribute('tabindex','-1');
     });
-    
-    // Add selection to clicked package
-    element.classList.add('selected');
-    
-    // Get package data from data attributes
-    const name = element.dataset.packageName;
-    const paymentUrl = element.dataset.paymentUrl;
-    const credits = parseInt(element.dataset.credits);
-    const price = parseFloat(element.dataset.price);
-    
-    // Store selected package info
+
+    el.classList.add('selected');
+    el.setAttribute('aria-checked','true');
+    el.setAttribute('tabindex','0');
+
     selectedPackage = {
-        name: name,
-        paymentUrl: paymentUrl,
-        credits: credits,
-        price: price
+      name: el.dataset.packageName,
+      paymentUrl: el.dataset.paymentUrl,
+      credits: parseInt(el.dataset.credits),
+      price: parseFloat(el.dataset.price)
     };
-    
-    // Update selection info
-    const selectionInfo = document.getElementById('selection-info');
-    const packageInfo = document.getElementById('selected-package-info');
-    const buyButton = document.getElementById('buy-button');
-    
-    selectionInfo.classList.add('show');
-    packageInfo.textContent = `${name} - ${credits} credits for $${price.toFixed(2)}`;
-    buyButton.disabled = false;
-    buyButton.textContent = `💳 Buy ${name} - $${price.toFixed(2)}`;
-}
 
-function buySelectedPackage() {
-    if (selectedPackage) {
-        // Redirect to Stripe payment link
-        window.open(selectedPackage.paymentUrl, '_blank');
+    const info = document.getElementById('selection-info');
+    const text = document.getElementById('selected-package-info');
+    const btn  = document.getElementById('buy-button');
+
+    info.classList.add('show');
+    text.textContent = `${selectedPackage.name} - ${selectedPackage.credits} credits for $${selectedPackage.price.toFixed(2)}`;
+    btn.disabled = false;
+    btn.textContent = `💳 Buy ${selectedPackage.name} - $${selectedPackage.price.toFixed(2)}`;
+  }
+
+  function handleKeyDown(e, el){
+    if(e.key === 'Enter' || e.key === ' '){
+      e.preventDefault();
+      selectPackage(el);
     }
-}
+  }
 
-// Handle URL parameters for success redirect
-const urlParams = new URLSearchParams(window.location.search);
-if (urlParams.get('success') === 'true') {
-    // Show success message
+  // Preselect first (or the "popular") package
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const popular = document.querySelector('.credit-package.popular');
+    const first   = document.querySelector('.credit-package');
+    selectPackage(popular || first);
+  });
+
+  function buySelectedPackage(){
+    if(selectedPackage){ window.open(selectedPackage.paymentUrl, '_blank'); }
+  }
+
+  // Success banner (optional)
+  const urlParams = new URLSearchParams(window.location.search);
+  if(urlParams.get('success')==='true'){
     const successDiv = document.createElement('div');
-    successDiv.className = 'payment-info';
-    successDiv.style.background = '#d1fae5';
-    successDiv.style.borderColor = '#10b981';
-    successDiv.innerHTML = '<h3>✅ Payment Successful!</h3><p>Your credits have been added to your account. You can now create amazing games!</p>';
-    
-    // Insert at the top
-    const container = document.querySelector('.max-w-6xl');
+    successDiv.className='payment-info';
+    successDiv.style.background='#d1fae5';
+    successDiv.style.borderColor='#10b981';
+    successDiv.innerHTML='<h3>✅ Payment Successful!</h3><p>Your credits have been added to your account. You can now create amazing games!</p>';
+    const container=document.querySelector('.max-w-6xl');
     container.insertBefore(successDiv, container.firstChild);
-    
-    // Auto-refresh after 3 seconds to show updated balance
-    setTimeout(() => {
-        window.location.href = '/payment';
-    }, 3000);
-}
+    setTimeout(()=>{ window.location.href='/payment'; }, 3000);
+  }
 </script>
 {% endblock %}

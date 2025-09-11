@@ -1233,7 +1233,9 @@ def payment():
     if supabase_manager.is_connected():
         user_credits = supabase_manager.get_user_credits(str(session['user_id']))
     
-    # Define credit packages with Payment Links
+    # Define credit packages with Payment Links and discount progression
+    base_price_per_credit = 0.167  # Mini Pack price per credit as base
+    
     credit_packages = [
         {
             'credits': 6, 
@@ -1273,6 +1275,24 @@ def payment():
             'payment_link_url': 'https://buy.stripe.com/test_bJe8wQ3OG8Srfnt4ro8g009'
         }
     ]
+    
+    # Calculate discount progression based on Mini Pack as base price
+    for package in credit_packages:
+        if package['name'] == 'Mini Pack':
+            package['discount_percent'] = 0
+            package['original_price'] = package['price']
+            package['savings'] = 0
+        else:
+            # Calculate what the price would be at Mini Pack rate
+            original_price_at_base_rate = package['credits'] * base_price_per_credit
+            # Calculate discount percentage
+            discount_percent = round(((base_price_per_credit - package['price_per_credit']) / base_price_per_credit) * 100)
+            # Calculate savings
+            savings = original_price_at_base_rate - package['price']
+            
+            package['discount_percent'] = discount_percent
+            package['original_price'] = original_price_at_base_rate
+            package['savings'] = savings
     
     authenticated = 'user_id' in session
     return render_template('payment.html', 

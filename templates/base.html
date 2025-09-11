@@ -8,10 +8,14 @@
   <!-- Pixel/retro font -->
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+
+  {# Per-page extra styles/meta/scripts can be injected here #}
+  {% block extra_head %}{% endblock %}
 </head>
 <body data-authenticated="{{ 'true' if session.user_id else 'false' }}">
-  <canvas id="starfield" aria-hidden="true"></canvas>
-  <div class="crt" aria-hidden="true"></div>
+  <!-- Background layers (click-through) -->
+  <canvas id="starfield" aria-hidden="true" style="pointer-events: none;"></canvas>
+  <div class="crt" aria-hidden="true" style="pointer-events: none;"></div>
 
   <header>
     <nav class="nav" aria-label="Main">
