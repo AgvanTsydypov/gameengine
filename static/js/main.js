@@ -45,7 +45,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Modal functionality
     const modals = {
         login: document.getElementById('login-modal'),
-        register: document.getElementById('register-modal')
+        register: document.getElementById('register-modal'),
+        publish: document.getElementById('publish-modal'),
+        update: document.getElementById('update-modal')
     };
 
     function openModal(modalId) {
@@ -53,6 +55,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (modals[modalId]) {
             modals[modalId].classList.add('active');
             bleep(880, 0.1);
+            
+            // Clear forms and alerts when opening modal
+            clearModalData(modalId);
         }
     }
 
@@ -64,6 +69,108 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function clearModalData(modalId) {
+        // Clear any existing global alerts
+        const existingAlert = document.querySelector('.global-alert');
+        if (existingAlert) {
+            existingAlert.remove();
+        }
+        
+        if (modalId === 'login') {
+            // Clear login form
+            const loginForm = document.getElementById('login-form');
+            if (loginForm) {
+                loginForm.reset();
+            }
+            
+            // Clear login alerts
+            const loginAlert = document.getElementById('login-alert');
+            if (loginAlert) {
+                loginAlert.innerHTML = '';
+            }
+            
+            // Remove loading state from submit button
+            const loginSubmitBtn = loginForm?.querySelector('button[type="submit"]');
+            if (loginSubmitBtn) {
+                loginSubmitBtn.classList.remove('loading');
+                loginSubmitBtn.disabled = false;
+            }
+        } else if (modalId === 'register') {
+            // Clear register form
+            const registerForm = document.getElementById('register-form');
+            if (registerForm) {
+                registerForm.reset();
+            }
+            
+            // Clear register alerts
+            const registerAlert = document.getElementById('register-alert');
+            if (registerAlert) {
+                registerAlert.innerHTML = '';
+            }
+            
+            // Remove loading state from submit button
+            const registerSubmitBtn = registerForm?.querySelector('button[type="submit"]');
+            if (registerSubmitBtn) {
+                registerSubmitBtn.classList.remove('loading');
+                registerSubmitBtn.disabled = false;
+            }
+        } else if (modalId === 'publish') {
+            // Clear publish form
+            const publishForm = document.getElementById('publish-form');
+            if (publishForm) {
+                publishForm.reset();
+            }
+            
+            // Clear any publish alerts
+            const publishAlert = document.getElementById('publish-alert');
+            if (publishAlert) {
+                publishAlert.innerHTML = '';
+            }
+            
+            // Reset publish button state
+            const publishSubmitBtn = document.getElementById('publish-submit-btn');
+            const publishText = document.getElementById('publish-text');
+            const publishProgress = document.getElementById('publish-progress');
+            if (publishSubmitBtn) {
+                publishSubmitBtn.disabled = false;
+                publishSubmitBtn.classList.remove('loading');
+            }
+            if (publishText) {
+                publishText.textContent = '🚀 PUBLISH TO COMMUNITY';
+            }
+            if (publishProgress) {
+                publishProgress.style.display = 'none';
+            }
+        } else if (modalId === 'update') {
+            // Clear update form
+            const updateForm = document.getElementById('update-form');
+            if (updateForm) {
+                updateForm.reset();
+            }
+            
+            // Clear any update alerts
+            const updateAlert = document.getElementById('update-alert');
+            if (updateAlert) {
+                updateAlert.innerHTML = '';
+            }
+            
+            // Reset update button state
+            const updateSubmitBtn = document.getElementById('update-submit-btn');
+            const updateText = document.getElementById('update-text');
+            const updateProgress = document.getElementById('update-progress');
+            if (updateSubmitBtn) {
+                updateSubmitBtn.disabled = false;
+                updateSubmitBtn.classList.remove('loading');
+            }
+            if (updateText) {
+                updateText.textContent = '💾 UPDATE GAME';
+            }
+            if (updateProgress) {
+                updateProgress.style.display = 'none';
+            }
+        }
+    }
+
     // Modal event listeners
     if (modals.login) {
         // Open login modal
@@ -73,9 +180,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Close login modal
-        modals.login.querySelector('.modal-close')?.addEventListener('click', closeAllModals);
+        modals.login.querySelector('.modal-close')?.addEventListener('click', () => {
+            closeAllModals();
+            clearModalData('login');
+        });
         modals.login.addEventListener('click', (e) => {
-            if (e.target === modals.login) closeAllModals();
+            if (e.target === modals.login) {
+                closeAllModals();
+                clearModalData('login');
+            }
         });
 
         // Switch to register
@@ -93,9 +206,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Close register modal
-        modals.register.querySelector('.modal-close')?.addEventListener('click', closeAllModals);
+        modals.register.querySelector('.modal-close')?.addEventListener('click', () => {
+            closeAllModals();
+            clearModalData('register');
+        });
         modals.register.addEventListener('click', (e) => {
-            if (e.target === modals.register) closeAllModals();
+            if (e.target === modals.register) {
+                closeAllModals();
+                clearModalData('register');
+            }
         });
 
         // Switch to login
@@ -108,7 +227,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // Close modals with Escape key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            closeAllModals();
+            // Check which modal is currently open and clear its data
+            if (modals.login && modals.login.classList.contains('active')) {
+                closeAllModals();
+                clearModalData('login');
+            } else if (modals.register && modals.register.classList.contains('active')) {
+                closeAllModals();
+                clearModalData('register');
+            } else if (modals.publish && modals.publish.style.display === 'flex') {
+                closePublishModal();
+                clearModalData('publish');
+            } else if (modals.update && modals.update.style.display === 'flex') {
+                closeUpdateModal();
+                clearModalData('update');
+            }
         }
     });
 
@@ -257,10 +389,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     const result = await response.json();
                     
                     if (response.ok && result.success) {
-                        showAlert('Account created successfully! Please log in.', 'success', alertContainer);
-                        setTimeout(() => {
-                            openModal('login');
-                        }, 2000);
+                        if (result.email_confirmation_required) {
+                            // Show email verification alert
+                            showAlert('Registration successful! Please check your email and click the confirmation link to complete your registration.', 'warning', alertContainer);
+                            // Don't redirect to login, stay on register page to show the alert
+                        } else {
+                            showAlert('Account created successfully! Please log in.', 'success', alertContainer);
+                            setTimeout(() => {
+                                openModal('login');
+                            }, 2000);
+                        }
                     } else {
                         const errorMessage = result.error || 'Registration failed. Please try again.';
                         showAlert(errorMessage, 'error', alertContainer);
@@ -270,10 +408,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     const result = await response.text();
                     
                     if (response.ok && result.includes('Registration successful')) {
-                        showAlert('Account created successfully! Please log in.', 'success', alertContainer);
-                        setTimeout(() => {
-                            openModal('login');
-                        }, 2000);
+                        if (result.includes('check your email') || result.includes('confirmation link')) {
+                            // Show email verification alert
+                            showAlert('Registration successful! Please check your email and click the confirmation link to complete your registration.', 'warning', alertContainer);
+                        } else {
+                            showAlert('Account created successfully! Please log in.', 'success', alertContainer);
+                            setTimeout(() => {
+                                openModal('login');
+                            }, 2000);
+                        }
                     } else {
                         showAlert('Registration failed. Please try again.', 'error', alertContainer);
                     }
@@ -508,3 +651,110 @@ window.App = {
         }, 5000);
     }
 };
+
+// Global functions for publish and update modals
+window.closePublishModal = function() {
+    const modal = document.getElementById('publish-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+        // Clear modal data when closing
+        if (typeof clearModalData === 'function') {
+            clearModalData('publish');
+        }
+    }
+};
+
+window.closeUpdateModal = function() {
+    const modal = document.getElementById('update-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+        // Clear modal data when closing
+        if (typeof clearModalData === 'function') {
+            clearModalData('update');
+        }
+    }
+};
+
+// Override the existing functions to include clearing
+window.publishGame = function() {
+    if (!window.currentGameHtml) {
+        App.showAlert('No game to publish. Please generate a game first.', 'error');
+        return;
+    }
+    
+    const title = document.getElementById('game-title-input').value.trim() || window.currentGameTitle;
+    document.getElementById('publish-title').value = title;
+    document.getElementById('publish-description').value = `AI-generated game: ${title}`;
+    
+    // Clear any existing data first
+    if (typeof clearModalData === 'function') {
+        clearModalData('publish');
+    }
+    
+    // Then populate with new data
+    document.getElementById('publish-title').value = title;
+    document.getElementById('publish-description').value = `AI-generated game: ${title}`;
+    
+    // Ensure the form is properly populated
+    setTimeout(() => {
+        const modal = document.getElementById('publish-modal');
+        modal.style.display = 'flex';
+        modal.classList.add('show');
+    }, 100);
+};
+
+window.updateGame = function() {
+    if (!window.currentGameHtml) {
+        App.showAlert('No game content to update.', 'error');
+        return;
+    }
+    
+    const title = document.getElementById('game-title-input').value.trim();
+    const description = document.getElementById('game-description-input').value.trim();
+    
+    if (!title) {
+        App.showAlert('Game title is required.', 'error');
+        return;
+    }
+    
+    // Clear any existing data first
+    if (typeof clearModalData === 'function') {
+        clearModalData('update');
+    }
+    
+    // Then populate with new data
+    document.getElementById('update-title').value = title;
+    document.getElementById('update-description').value = description;
+    
+    // Show the update modal
+    setTimeout(() => {
+        const modal = document.getElementById('update-modal');
+        modal.style.display = 'flex';
+        modal.classList.add('show');
+    }, 100);
+};
+
+// Add click outside handlers for publish and update modals
+document.addEventListener('DOMContentLoaded', function() {
+    // Publish modal click outside handler
+    const publishModal = document.getElementById('publish-modal');
+    if (publishModal) {
+        publishModal.addEventListener('click', function(e) {
+            if (e.target === publishModal) {
+                closePublishModal();
+            }
+        });
+    }
+    
+    // Update modal click outside handler
+    const updateModal = document.getElementById('update-modal');
+    if (updateModal) {
+        updateModal.addEventListener('click', function(e) {
+            if (e.target === updateModal) {
+                closeUpdateModal();
+            }
+        });
+    }
+});

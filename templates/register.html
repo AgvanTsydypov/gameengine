@@ -15,10 +15,12 @@
                 <div id="register-alert"></div>
                 
                 {% if show_email_confirmation %}
-                <div class="alert alert-info" role="alert">
-                    <i class="fas fa-envelope"></i>
-                    <strong>Check your email!</strong><br>
-                    We've sent you a confirmation link. Please check your email and click the link to complete your registration.
+                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                    <i class="fas fa-envelope-open-text"></i>
+                    <strong>Email Verification Required!</strong><br>
+                    We've sent a confirmation link to your email address. Please check your inbox (and spam folder) and click the link to complete your registration.<br>
+                    <small class="text-muted">You won't be able to log in until you verify your email.</small>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
                 {% endif %}
                 
