@@ -1236,13 +1236,22 @@ def payment():
     # Define credit packages with Payment Links
     credit_packages = [
         {
+            'credits': 6, 
+            'price': 1.00, 
+            'price_cents': 100, 
+            'name': 'Mini Pack', 
+            'description': 'Great for testing a few games', 
+            'price_per_credit': 0.167,
+            'payment_link_url': 'https://buy.stripe.com/test_9B65kE3OGfgP7V19LI8g006'
+        },
+        {
             'credits': 50, 
             'price': 5.00, 
             'price_cents': 500, 
             'name': 'Starter Pack', 
             'description': 'Perfect for trying out our AI game generation', 
-            'price_per_credit': 0.10,
-            'payment_link_url': 'https://buy.stripe.com/test_5kQ7sM1Gy6Kj0sz0b88g003'
+            'price_per_credit': 0.100,
+            'payment_link_url': 'https://buy.stripe.com/test_9B66oIetk5Gfejp5vs8g007'
         },
         {
             'credits': 120, 
@@ -1252,7 +1261,7 @@ def payment():
             'description': 'Great for regular game creators', 
             'popular': True, 
             'price_per_credit': 0.083,
-            'payment_link_url': 'https://buy.stripe.com/test_8x228s9904Cbcbh4ro8g004'
+            'payment_link_url': 'https://buy.stripe.com/test_9B66oIgBs7Onb7d6zw8g008'
         },
         {
             'credits': 300, 
@@ -1261,7 +1270,7 @@ def payment():
             'name': 'Pro Pack', 
             'description': 'Best value for serious game developers', 
             'price_per_credit': 0.067,
-            'payment_link_url': 'https://buy.stripe.com/test_4gMdRa2KC3y7grx7DA8g005'
+            'payment_link_url': 'https://buy.stripe.com/test_bJe8wQ3OG8Srfnt4ro8g009'
         }
     ]
     

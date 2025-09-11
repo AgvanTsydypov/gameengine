@@ -20,6 +20,12 @@ def create_products_and_prices():
     # Define credit packages
     packages = [
         {
+            'name': 'Mini Pack - 6 Credits',
+            'description': 'Great for testing a few games',
+            'price': 100,  # $1.00 in cents
+            'credits': 6
+        },
+        {
             'name': 'Starter Pack - 50 Credits',
             'description': 'Perfect for trying out our AI game generation',
             'price': 500,  # $5.00 in cents
