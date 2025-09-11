@@ -58,6 +58,16 @@ header{ position:sticky; top:0; z-index:10; border-bottom:2px solid var(--line);
 .chip::before, .chip::after{ content:""; position:absolute; inset:0; }
 .chip::before{ background: conic-gradient(from 0turn,var(--neon),var(--cyber),var(--neon)); filter: saturate(120%); }
 .chip::after{ inset:3px; background:var(--bg); }
+
+.logo-img{ 
+  width: 40px; 
+  height: 40px; 
+  object-fit: contain; 
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 6px rgba(157, 123, 255, 0.4));
+  transform: scale(1.5);
+  transform-origin: center;
+}
 .logo b{ font-size:12px; text-transform:uppercase; }
 .logo small{ color:var(--muted); font-size:10px; }
 

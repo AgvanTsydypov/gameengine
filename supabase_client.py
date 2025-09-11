@@ -13,7 +13,12 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Configure logging to WARNING level to reduce verbose output
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
+
+# Disable verbose httpx logging
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 def sanitize_search_query(query: str) -> str:
     """

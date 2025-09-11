@@ -1,4 +1,4 @@
-// AI Game Studio - Pixel Theme JavaScript
+// GlitchPeachAI - Pixel Theme JavaScript
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize audio for pixel-style UI sounds

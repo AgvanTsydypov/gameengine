@@ -17,8 +17,11 @@ import stripe
 load_dotenv()
 
 # Logging configuration
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
+
+# Disable verbose httpx logging
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 def validate_search_input(search_query: str) -> str:
     """

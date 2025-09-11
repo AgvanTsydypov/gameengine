@@ -1,13 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}AI Game Studio — Pixel{% endblock %}
+{% block title %}GlitchPeach.AI{% endblock %}
 
 {% block content %}
 <main>
   <section class="hero">
-    <div class="kicker"><span class="dot"></span>MINIMAL • PIXEL • SPACE</div>
     <h1>BUILD AI GAMES. <br/> SHIP FAST. RULE THE GALAXY.</h1>
-    <p class="sub">Generate, iterate, and publish — all in one AI studio. <br/> No noise. Just play.</p>
+    <p class="sub">Generate, iterate, and publish — all in one GlitchPeachAI studio. <br/> No noise. Just play.</p>
     <div class="hero-cta">
       {% if session.user_id %}
         <a class="btn btn-cta" href="{{ url_for('create_game') }}"><span>+ CREATE NEW GAME</span></a>

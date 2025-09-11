@@ -1,11 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}My Games - AI Game Studio{% endblock %}
+{% block title %}My Games - GlitchPeachAI{% endblock %}
 
 {% block content %}
 <main>
   <section class="hero">
-    <div class="kicker"><span class="dot"></span>MY • GAMES • COLLECTION</div>
     <h1>MY UPLOADED GAMES</h1>
     <p class="sub">Create, manage, and play your games</p>
     <div class="credits-display">
@@ -19,46 +18,34 @@
 
   <!-- Profile Section -->
   <section class="section">
-    <div style="max-width: 600px; margin: 0 auto;">
-      <div class="profile-card">
-        <div class="profile-header">
-          <h2 style="color: var(--cyber); margin: 0;">PROFILE SETTINGS</h2>
-        </div>
-        
-        <div class="profile-content">
-          <form id="nickname-form" class="nickname-form">
-            <div class="form-group">
-              <label for="nickname" class="form-label">Your Nickname</label>
-              <div class="input-group">
+    <div style="max-width: 500px; margin: 0 auto;">
+      <div class="profile-card-compact">
+        <div class="profile-content-compact">
+          <form id="nickname-form" class="nickname-form-compact">
+            <div class="form-group-compact">
+              <label for="nickname" class="form-label-compact">NICKNAME:</label>
+              <div class="input-group-compact">
                 <input 
                   type="text" 
                   id="nickname" 
                   name="nickname" 
-                  class="form-input" 
-                  placeholder="Enter your nickname..." 
+                  class="form-input-compact" 
+                  placeholder="Enter nickname" 
                   value="{{ user_nickname or '' }}"
                   maxlength="50"
                   autocomplete="off"
                 >
-                <button type="submit" class="btn btn-primary" id="save-nickname-btn">
+                <button type="submit" class="btn btn-primary-compact" id="save-nickname-btn">
                   <span id="save-btn-text">💾 SAVE</span>
                 </button>
-              </div>
-              <div class="form-help">
-                Choose a unique nickname that will be displayed with your games (2-50 characters, letters, numbers, spaces, hyphens, and underscores only)
+                {% if user_nickname %}
+                <button type="button" class="btn btn-secondary-compact" onclick="deleteNickname()">
+                  <span>🗑️ REMOVE</span>
+                </button>
+                {% endif %}
               </div>
             </div>
           </form>
-          
-          {% if user_nickname %}
-          <div class="current-nickname">
-            <span class="nickname-label">Current nickname:</span>
-            <span class="nickname-value">{{ user_nickname }}</span>
-            <button class="btn btn-secondary btn-sm" onclick="deleteNickname()">
-              <span>🗑️ REMOVE</span>
-            </button>
-          </div>
-          {% endif %}
         </div>
       </div>
     </div>
@@ -522,137 +509,128 @@ function updateCurrentNicknameDisplay(nickname) {
   }
 }
 
-/* Profile Section Styles */
-.profile-card {
+/* Compact Profile Section Styles */
+.profile-card-compact {
   border: 2px solid var(--line);
   background: var(--card);
   border-radius: 8px;
   overflow: hidden;
-  margin-bottom: 40px;
+  margin-bottom: 20px;
 }
 
-.profile-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--line);
-  background: linear-gradient(135deg, var(--grid), var(--card));
+.profile-content-compact {
+  padding: 12px 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: fit-content;
+  margin: 0 auto;
 }
 
-.profile-content {
-  padding: 20px;
+.nickname-form-compact {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.nickname-form {
-  margin-bottom: 16px;
+.form-group-compact {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.form-group {
-  margin-bottom: 12px;
-}
-
-.form-label {
-  display: block;
-  color: var(--text);
-  font-size: 14px;
+.form-label-compact {
+  display: inline-block;
+  color: var(--cyber);
+  font-size: 12px;
   font-weight: 600;
-  margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
-.input-group {
+.input-group-compact {
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
+  gap: 8px;
+  align-items: center;
 }
 
-.form-input {
-  flex: 1;
-  padding: 12px 16px;
+.form-input-compact {
+  width: 200px;
+  padding: 8px 12px;
   border: 2px solid var(--line);
   background: var(--bg);
   color: var(--text);
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 4px;
+  font-size: 12px;
   transition: all 0.3s ease;
 }
 
-.form-input:focus {
+.form-input-compact:focus {
   outline: none;
   border-color: var(--cyber);
-  box-shadow: 0 0 0 3px rgba(0, 255, 255, 0.1);
+  box-shadow: 0 0 0 2px rgba(0, 255, 255, 0.1);
 }
 
-.form-input::placeholder {
+.form-input-compact::placeholder {
   color: var(--muted);
 }
 
-.form-help {
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.btn-primary {
+.btn-primary-compact {
   background: linear-gradient(180deg, var(--cyber), #00cc99);
   border: 2px solid var(--cyber);
-  color: var(--bg);
-  padding: 12px 20px;
-  border-radius: 6px;
-  font-size: 14px;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   cursor: pointer;
   transition: all 0.3s ease;
   white-space: nowrap;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
-.btn-primary:hover:not(:disabled) {
+.btn-primary-compact:hover:not(:disabled) {
   background: linear-gradient(180deg, #00cc99, var(--cyber));
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 255, 255, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(0, 255, 255, 0.3);
 }
 
-.btn-primary:disabled {
+.btn-primary-compact:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
 }
 
-.btn-sm {
+.btn-secondary-compact {
+  background: linear-gradient(180deg, #1a1a2e, #16213e);
+  border: 2px solid var(--line);
+  color: #ff4444;
   padding: 8px 12px;
-  font-size: 12px;
-}
-
-.current-nickname {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: linear-gradient(135deg, var(--grid), var(--card));
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  margin-top: 16px;
-}
-
-.nickname-label {
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.nickname-value {
-  color: var(--cyber);
-  font-size: 16px;
-  font-weight: 600;
-  background: var(--bg);
-  padding: 6px 12px;
   border-radius: 4px;
-  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-secondary-compact:hover {
+  background: linear-gradient(180deg, #ff4444, #cc3333);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(255, 68, 68, 0.3);
 }
 
 @media (max-width: 768px) {
@@ -679,25 +657,48 @@ function updateCurrentNicknameDisplay(nickname) {
     padding: 10px 16px;
   }
   
-  .profile-card {
-    margin-bottom: 24px;
+  .profile-card-compact {
+    margin-bottom: 16px;
   }
   
-  .profile-header {
-    padding: 12px 16px;
+  .profile-content-compact {
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
   }
   
-  .profile-content {
-    padding: 16px;
-  }
-  
-  .input-group {
+  .nickname-form-compact {
     flex-direction: column;
     gap: 8px;
+    width: 100%;
   }
   
-  .btn-primary {
+  .form-group-compact {
+    flex-direction: column;
+    gap: 8px;
     width: 100%;
+  }
+  
+  .form-label-compact {
+    text-align: center;
+  }
+  
+  .input-group-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+  
+  .form-input-compact {
+    width: 100%;
+    min-width: 150px;
+  }
+  
+  .btn-primary-compact,
+  .btn-secondary-compact {
+    flex: 1;
+    min-width: 80px;
     justify-content: center;
   }
 }

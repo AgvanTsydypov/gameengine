@@ -1,6 +1,6 @@
 # Stripe Payment Links Integration Setup
 
-This guide will help you set up Stripe Payment Links for the AI Game Studio credit top-up system.
+This guide will help you set up Stripe Payment Links for the GlitchPeachAI credit top-up system.
 
 ## Prerequisites
 
