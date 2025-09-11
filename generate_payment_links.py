@@ -65,12 +65,21 @@ def create_products_and_prices():
         )
         print(f"✅ Price created: {price.id}")
         
-        # Create payment link
+        # Create payment link with redirect URLs
+        base_url = os.getenv('BASE_URL', 'http://localhost:8888')
         payment_link = stripe.PaymentLink.create(
             line_items=[{
                 'price': price.id,
                 'quantity': 1,
             }],
+            after_completion={
+                'type': 'redirect',
+                'redirect': {
+                    'url': f'{base_url}/payment_success'
+                }
+            },
+            # Note: Stripe Payment Links don't support cancel URLs directly
+            # Users can manually return via browser back button or close tab
         )
         print(f"✅ Payment Link created: {payment_link.url}")
         
@@ -82,6 +91,51 @@ def create_products_and_prices():
         })
     
     return payment_links
+
+def cleanup_old_products():
+    """Helper function to list and optionally delete old products"""
+    print("\n" + "="*60)
+    print("🧹 CLEANUP OLD PRODUCTS (Optional)")
+    print("="*60)
+    print("If you want to clean up old products, run this in Python shell:")
+    print("""
+import stripe
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+
+# List all products
+products = stripe.Product.list(limit=20)
+for product in products.data:
+    if 'Pack' in product.name:  # Only credit pack products
+        print(f"Product: {product.name} (ID: {product.id})")
+        
+        # To delete a specific product (uncomment and modify):
+        # stripe.Product.modify(product.id, active=False)
+        # print(f"Deactivated: {product.name}")
+""")
+
+def show_app_update_instructions(payment_links):
+    """Show instructions for updating app.py with new payment links"""
+    print("\n" + "="*60)
+    print("🔄 NEXT STEPS:")
+    print("="*60)
+    print("1. Copy the credit_packages array above")
+    print("2. Replace the existing credit_packages in app.py")
+    print("3. Restart your Flask application")
+    print("")
+    print("⚠️  IMPORTANT: The new Payment Links include redirect URLs:")
+    
+    for package in payment_links:
+        print(f"   - {package['name']}: Redirects to your BASE_URL/payment_success")
+    
+    print("")
+    print("🌍 Environment-specific URLs:")
+    print("   - Development: http://localhost:8888/payment_success")
+    print("   - Production: https://glitchpeach.com/payment_success")
+    print("="*60)
 
 def print_app_config(payment_links):
     """Print the configuration to update in app.py"""
@@ -115,10 +169,24 @@ def print_app_config(payment_links):
     print("]")
     
     print("\n" + "="*60)
-    print("DON'T FORGET TO:")
-    print("1. Set up webhooks for checkout.session.completed")
-    print("2. Test the integration with test cards")
-    print("3. Update success/cancel URLs in Stripe Dashboard if needed")
+    print("IMPORTANT SETUP STEPS:")
+    print("="*60)
+    print("1. Set BASE_URL in your .env file:")
+    print("   BASE_URL=https://your-domain.com (for production)")
+    print("   BASE_URL=http://localhost:8888 (for development)")
+    print("")
+    print("2. Set up webhooks for checkout.session.completed:")
+    print("   - Webhook URL: https://your-domain.com/stripe_webhook")
+    print("   - Add STRIPE_WEBHOOK_SECRET to .env file")
+    print("")
+    print("3. Test the integration with test cards:")
+    print("   - 4242 4242 4242 4242 (Visa)")
+    print("   - Any future expiry date and 3-digit CVC")
+    print("")
+    print("4. Payment flow:")
+    print("   - User clicks 'Buy' → Stripe Payment Link")
+    print("   - After payment → Redirects to /payment_success")
+    print("   - Success page → Shows updated credits & redirects to /payment")
     print("="*60)
 
 if __name__ == "__main__":
@@ -131,6 +199,8 @@ if __name__ == "__main__":
         print("🚀 Creating Stripe products, prices, and payment links...")
         payment_links = create_products_and_prices()
         print_app_config(payment_links)
+        show_app_update_instructions(payment_links)
+        cleanup_old_products()
         
     except stripe.error.StripeError as e:
         print(f"❌ Stripe error: {e}")

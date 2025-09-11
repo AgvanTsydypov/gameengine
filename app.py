@@ -844,6 +844,7 @@ def login():
         
         if auth_result and 'error' not in auth_result:
             # Successful authentication
+            session.permanent = True  # Делаем сессию постоянной для лучшей совместимости с redirects
             session['user_id'] = auth_result['user'].id
             session['email'] = auth_result['user'].email
             
@@ -1221,16 +1222,19 @@ def delete_data(data_id):
 # Stripe Payment Links integration for balance top-ups
 @app.route('/payment')
 def payment():
+    # Разрешаем доступ к странице payment даже без авторизации
+    # Это позволяет пользователю увидеть результат оплаты
     if 'user_id' not in session:
-        return redirect(url_for('login'))
+        logger.info("User accessing payment page without session - showing packages anyway")
+        # Продолжаем выполнение вместо redirect на login
     
     if not stripe_manager.is_configured():
         flash('Stripe not configured. Payment feature will be available after setup', 'warning')
-        return redirect(url_for('my_games'))
+        return redirect(url_for('index'))  # Redirect to index instead of my_games
     
-    # Get user's current credits
+    # Get user's current credits (only if logged in)
     user_credits = 0
-    if supabase_manager.is_connected():
+    if 'user_id' in session and supabase_manager.is_connected():
         user_credits = supabase_manager.get_user_credits(str(session['user_id']))
     
     # Define credit packages with Payment Links and discount progression
@@ -1238,41 +1242,41 @@ def payment():
     
     credit_packages = [
         {
-            'credits': 6, 
-            'price': 1.00, 
-            'price_cents': 100, 
-            'name': 'Mini Pack', 
-            'description': 'Great for testing a few games', 
+            'credits': 6,
+            'price': 1.00,
+            'price_cents': 100,
+            'name': 'Mini Pack',
+            'description': 'Great for testing a few games',
             'price_per_credit': 0.167,
-            'payment_link_url': 'https://buy.stripe.com/test_9B65kE3OGfgP7V19LI8g006'
+            'payment_link_url': 'https://buy.stripe.com/test_fZu9AU2KC9Wv4IP3nk8g00h'
         },
         {
-            'credits': 50, 
-            'price': 5.00, 
-            'price_cents': 500, 
-            'name': 'Starter Pack', 
-            'description': 'Perfect for trying out our AI game generation', 
+            'credits': 50,
+            'price': 5.00,
+            'price_cents': 500,
+            'name': 'Starter Pack',
+            'description': 'Perfect for trying out our AI game generation',
             'price_per_credit': 0.100,
-            'payment_link_url': 'https://buy.stripe.com/test_9B66oIetk5Gfejp5vs8g007'
+            'payment_link_url': 'https://buy.stripe.com/test_9B66oIetk6Kjcbh8HE8g00i'
         },
         {
-            'credits': 120, 
-            'price': 10.00, 
-            'price_cents': 1000, 
-            'name': 'Creator Pack', 
-            'description': 'Great for regular game creators', 
-            'popular': True, 
+            'credits': 120,
+            'price': 10.00,
+            'price_cents': 1000,
+            'name': 'Creator Pack',
+            'description': 'Great for regular game creators',
+            'popular': True,
             'price_per_credit': 0.083,
-            'payment_link_url': 'https://buy.stripe.com/test_9B66oIgBs7Onb7d6zw8g008'
+            'payment_link_url': 'https://buy.stripe.com/test_fZufZi5WO7Onejpe1Y8g00j'
         },
         {
-            'credits': 300, 
-            'price': 20.00, 
-            'price_cents': 2000, 
-            'name': 'Pro Pack', 
-            'description': 'Best value for serious game developers', 
+            'credits': 300,
+            'price': 20.00,
+            'price_cents': 2000,
+            'name': 'Pro Pack',
+            'description': 'Best value for serious game developers',
             'price_per_credit': 0.067,
-            'payment_link_url': 'https://buy.stripe.com/test_bJe8wQ3OG8Srfnt4ro8g009'
+            'payment_link_url': 'https://buy.stripe.com/test_aFa4gA4SK6Kj1wD2jg8g00k'
         }
     ]
     
@@ -1373,15 +1377,62 @@ def stripe_webhook():
             # Get the product name to determine credits
             if line_items.data:
                 product_name = line_items.data[0].description
+                logger.info(f"Processing payment for product: '{product_name}'")
+                
+                # Log all line item details for debugging
+                line_item = line_items.data[0]
+                logger.info(f"Line item details: price_id={line_item.price.id}, product_id={line_item.price.product}, description='{line_item.description}', quantity={line_item.quantity}")
+                
                 credits = 0
                 
-                # Map product names to credits
-                if '50 Credits' in product_name:
+                # Map product names to credits (updated for current packages)
+                # Check different variations of the product name
+                product_lower = product_name.lower()
+                
+                # Try to extract number from product name as fallback
+                numbers = re.findall(r'\b(\d+)\b', product_name)
+                logger.info(f"DEBUG: product_lower='{product_lower}', numbers={numbers}")
+                
+                # Detailed checks for debugging
+                check_6_credits = '6 credits' in product_lower
+                check_mini_pack = 'mini pack' in product_lower
+                check_6_in_numbers = ('6' in numbers)
+                logger.info(f"DEBUG: 6_credits={check_6_credits}, mini_pack={check_mini_pack}, 6_in_numbers={check_6_in_numbers}")
+                
+                if check_6_credits or check_mini_pack or check_6_in_numbers:
+                    credits = 6
+                    logger.info("Matched Mini Pack (6 credits)")
+                elif '50 credits' in product_lower or 'starter pack' in product_lower or ('50' in numbers):
                     credits = 50
-                elif '120 Credits' in product_name:
+                    logger.info("Matched Starter Pack (50 credits)")
+                elif '120 credits' in product_lower or 'creator pack' in product_lower or ('120' in numbers):
                     credits = 120
-                elif '300 Credits' in product_name:
+                    logger.info("Matched Creator Pack (120 credits)")
+                elif '300 credits' in product_lower or 'pro pack' in product_lower or ('300' in numbers):
                     credits = 300
+                    logger.info("Matched Pro Pack (300 credits)")
+                else:
+                    # Final fallback - try to map by any number found
+                    if numbers:
+                        found_number = int(numbers[0])
+                        if found_number == 6:
+                            credits = 6
+                            logger.info(f"Fallback: Matched 6 credits from number {found_number}")
+                        elif found_number == 50:
+                            credits = 50
+                            logger.info(f"Fallback: Matched 50 credits from number {found_number}")
+                        elif found_number == 120:
+                            credits = 120
+                            logger.info(f"Fallback: Matched 120 credits from number {found_number}")
+                        elif found_number == 300:
+                            credits = 300
+                            logger.info(f"Fallback: Matched 300 credits from number {found_number}")
+                        else:
+                            logger.warning(f"Fallback: Found number {found_number} but no mapping available")
+                    else:
+                        logger.warning(f"No credits mapping found for product: '{product_name}' (lowercase: '{product_lower}', numbers: {numbers})")
+                
+                logger.info(f"Final credits amount: {credits}")
                 
                 if credits > 0:
                     # Get customer email to find user
@@ -1414,18 +1465,100 @@ def stripe_webhook():
 
 @app.route('/payment_success')
 def payment_success():
-    """Handle successful payment redirects"""
-    if 'user_id' not in session:
-        flash('Please log in to view your payment status.', 'error')
-        return redirect(url_for('login'))
+    """Handle successful payment redirects from Stripe"""
     
-    # Get updated user credits
-    user_credits = 0
-    if supabase_manager.is_connected():
-        user_credits = supabase_manager.get_user_credits(str(session['user_id']))
+    logger.info("=== PAYMENT SUCCESS ROUTE CALLED ===")
+    logger.info(f"Request args: {dict(request.args)}")
+    logger.info(f"Session data: {dict(session)}")
     
-    flash('Payment successful! Your credits have been added to your account.', 'success')
-    return redirect(url_for('my_games'))
+    # Get session_id from URL parameters (if provided by Stripe)
+    session_id = request.args.get('session_id')
+    logger.info(f"Stripe session_id: {session_id}")
+    
+    # Try to process payment as backup if webhook failed
+    if session_id and 'user_id' in session:
+        try:
+            # Get the checkout session from Stripe
+            checkout_session = stripe.checkout.Session.retrieve(session_id)
+            
+            if checkout_session.payment_status == 'paid':
+                logger.info(f"Processing backup credit addition for session {session_id}")
+                
+                # Get line items to determine credits
+                line_items = stripe.checkout.Session.list_line_items(session_id)
+                if line_items.data:
+                    product_name = line_items.data[0].description
+                    logger.info(f"Backup: Processing payment for product: '{product_name}'")
+                    
+                    # Log line item details for debugging
+                    line_item = line_items.data[0]
+                    logger.info(f"Backup: Line item details: price_id={line_item.price.id}, description='{line_item.description}', quantity={line_item.quantity}")
+                    
+                    credits = 0
+                    
+                    # Map product names to credits (same logic as webhook)
+                    product_lower = product_name.lower()
+                    
+                    # Try to extract number from product name as fallback
+                    numbers = re.findall(r'\b(\d+)\b', product_name)
+                    logger.info(f"BACKUP DEBUG: product_lower='{product_lower}', numbers={numbers}")
+                    
+                    # Detailed checks for debugging
+                    check_6_credits = '6 credits' in product_lower
+                    check_mini_pack = 'mini pack' in product_lower
+                    check_6_in_numbers = ('6' in numbers)
+                    logger.info(f"BACKUP DEBUG: 6_credits={check_6_credits}, mini_pack={check_mini_pack}, 6_in_numbers={check_6_in_numbers}")
+                    
+                    if check_6_credits or check_mini_pack or check_6_in_numbers:
+                        credits = 6
+                        logger.info("Backup: Matched Mini Pack (6 credits)")
+                    elif '50 credits' in product_lower or 'starter pack' in product_lower or ('50' in numbers):
+                        credits = 50
+                        logger.info("Backup: Matched Starter Pack (50 credits)")
+                    elif '120 credits' in product_lower or 'creator pack' in product_lower or ('120' in numbers):
+                        credits = 120
+                        logger.info("Backup: Matched Creator Pack (120 credits)")
+                    elif '300 credits' in product_lower or 'pro pack' in product_lower or ('300' in numbers):
+                        credits = 300
+                        logger.info("Backup: Matched Pro Pack (300 credits)")
+                    else:
+                        # Final fallback - try to map by any number found
+                        if numbers:
+                            found_number = int(numbers[0])
+                            if found_number == 6:
+                                credits = 6
+                                logger.info(f"Backup Fallback: Matched 6 credits from number {found_number}")
+                            elif found_number == 50:
+                                credits = 50
+                                logger.info(f"Backup Fallback: Matched 50 credits from number {found_number}")
+                            elif found_number == 120:
+                                credits = 120
+                                logger.info(f"Backup Fallback: Matched 120 credits from number {found_number}")
+                            elif found_number == 300:
+                                credits = 300
+                                logger.info(f"Backup Fallback: Matched 300 credits from number {found_number}")
+                            else:
+                                logger.warning(f"Backup Fallback: Found number {found_number} but no mapping available")
+                        else:
+                            logger.warning(f"Backup: No credits mapping found for product: '{product_name}' (lowercase: '{product_lower}', numbers: {numbers})")
+                    
+                    logger.info(f"Backup: Final credits amount: {credits}")
+                    
+                    if credits > 0 and supabase_manager.is_connected():
+                        # Add credits to user account
+                        user_id = str(session['user_id'])
+                        success = supabase_manager.add_credits(user_id, credits)
+                        if success:
+                            logger.info(f"Backup: Added {credits} credits to user {user_id} after successful payment")
+                        else:
+                            logger.error(f"Backup: Failed to add credits to user {user_id}")
+                    
+        except Exception as e:
+            logger.error(f"Error in backup credit processing: {e}")
+    
+    # Always redirect to payment page with success flag
+    logger.info("Redirecting to payment page with success flag")
+    return redirect('/payment?success=true')
 
 # ============ LIKES SYSTEM ROUTES ============
 

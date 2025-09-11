@@ -38,6 +38,9 @@ class Config:
     SESSION_COOKIE_HTTPONLY = os.getenv('SESSION_COOKIE_HTTPONLY', 'True').lower() == 'true'
     SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
     
+    # Увеличиваем время жизни сессии для лучшей совместимости с платежными redirects
+    PERMANENT_SESSION_LIFETIME = int(os.getenv('SESSION_LIFETIME', 3600))  # 1 час
+    
     # Настройки загрузки файлов
     MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))  # 16MB
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
@@ -51,7 +54,7 @@ class Config:
     PORT = int(os.getenv('PORT', 8000))
     
     # Базовый URL для редиректов (для email подтверждения)
-    BASE_URL = os.getenv('BASE_URL', 'http://localhost:5000')
+    BASE_URL = os.getenv('BASE_URL', 'http://localhost:8888')
 
 class DevelopmentConfig(Config):
     """Конфигурация для разработки"""

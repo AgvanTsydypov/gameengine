@@ -261,17 +261,30 @@
     if(selectedPackage){ window.open(selectedPackage.paymentUrl, '_blank'); }
   }
 
-  // Success banner (optional)
+  // Success banner (проверяем success параметр)
   const urlParams = new URLSearchParams(window.location.search);
-  if(urlParams.get('success')==='true'){
+  if(urlParams.get('success') === 'true'){
     const successDiv = document.createElement('div');
-    successDiv.className='payment-info';
-    successDiv.style.background='#d1fae5';
-    successDiv.style.borderColor='#10b981';
-    successDiv.innerHTML='<h3>✅ Payment Successful!</h3><p>Your credits have been added to your account. You can now create amazing games!</p>';
-    const container=document.querySelector('.max-w-6xl');
-    container.insertBefore(successDiv, container.firstChild);
-    setTimeout(()=>{ window.location.href='/payment'; }, 3000);
+    successDiv.className = 'payment-info';
+    successDiv.style.background = '#d1fae5';
+    successDiv.style.borderColor = '#10b981';
+    successDiv.style.border = '2px solid #10b981';
+    successDiv.style.marginBottom = '2rem';
+    
+    // Простое сообщение о успехе
+    successDiv.innerHTML = '<h3 style="color:#065f46;margin:0 0 0.5rem 0;">✅ Payment Successful!</h3><p style="color:#047857;margin:0;">Your payment was completed successfully! Credits have been added to your account. If you don\'t see the updated balance immediately, please refresh the page.</p>';
+    
+    const container = document.querySelector('.max-w-6xl');
+    if(container) {
+      container.insertBefore(successDiv, container.firstChild);
+    }
+    
+    // Убираем success параметр из URL через 5 секунд
+    setTimeout(() => {
+      const url = new URL(window.location);
+      url.searchParams.delete('success');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+    }, 5000);
   }
 </script>
 {% endblock %}
