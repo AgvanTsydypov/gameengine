@@ -74,21 +74,26 @@ header{ position:sticky; top:0; z-index:10; border-bottom:2px solid var(--line);
 .actions{ display:flex; gap:10px; }
 .btn{ position:relative; display:inline-flex; align-items:center; gap:8px; text-decoration:none; color:var(--fg);
   background: linear-gradient(180deg, #121525, #0e1120);
-  padding: 12px 14px; border:0; border-radius:0; transition: transform .08s ease; cursor: crosshair; }
+  padding: 12px 14px; border:0; border-radius:30px; transition: transform .08s ease; cursor: crosshair; }
 .btn::before{ content:""; position:absolute; inset:-2px; background:
   linear-gradient(90deg, var(--neon), var(--cyber));
-  z-index:-1;
+  z-index:-1; border-radius: 30px;
 }
-.btn::after{ content:""; position:absolute; inset:0; background: linear-gradient(180deg, #0f1222, #0b0e18); }
+.btn::after{ content:""; position:absolute; inset:0; background: linear-gradient(180deg, #0f1222, #0b0e18); border-radius: 30px; }
 .btn span{ position:relative; z-index:1; font-family: 'Press Start 2P', system-ui, monospace; }
 .btn:hover{ transform: translateY(-2px); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn:disabled:hover { transform: none; }
 
-/* Ensure all buttons use pixeled font */
+/* Ensure all buttons use pixeled font and are round */
 .btn, .btn span {
   font-family: 'Press Start 2P', system-ui, monospace !important;
   font-size: 11px !important;
+}
+
+/* Make all buttons round */
+button, input[type="button"], input[type="submit"], .btn {
+  border-radius: 30px !important;
 }
 
 /* Specific rules for form submit buttons */
@@ -98,7 +103,8 @@ header{ position:sticky; top:0; z-index:10; border-bottom:2px solid var(--line);
 }
 
 .btn-ghost{ background: #0d1020; }
-.btn-ghost::before{ background: var(--line); }
+.btn-ghost::before{ background: var(--line); border-radius: 30px; }
+.btn-ghost::after{ border-radius: 30px; }
 
 .btn-cta{ }
 
@@ -220,6 +226,7 @@ h1{ margin:14px 0; font-size: clamp(22px, 5.5vw, 40px); line-height:1.25; text-s
   font-size: 16px;
   cursor: crosshair;
   padding: 4px;
+  border-radius: 30px;
 }
 
 .modal-close:hover {
@@ -268,6 +275,7 @@ h1{ margin:14px 0; font-size: clamp(22px, 5.5vw, 40px); line-height:1.25; text-s
 .form-submit {
   width: 100%;
   margin-top: 8px;
+  border-radius: 30px;
 }
 
 .auth-switch {
@@ -514,7 +522,7 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
   font-size: 12px;
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: 30px;
   transition: all 0.2s ease;
 }
 
@@ -550,6 +558,7 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
   min-width: 100px;
   font-family: 'Press Start 2P', system-ui, monospace !important;
   font-size: 11px !important;
+  border-radius: 30px;
 }
 
 .like-btn-action span {
@@ -609,16 +618,16 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
 .search-container {
   margin-bottom: 30px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   gap: 20px;
   flex-wrap: wrap;
 }
 
 .search-form {
-  width: 320px;
-  max-width: 320px;
-  min-width: 280px;
+  width: 450px;
+  max-width: 450px;
+  min-width: 400px;
 }
 
 .search-input-group {
@@ -628,18 +637,18 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
   background: var(--card);
   border: 2px solid var(--line);
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
   transition: all 0.3s ease;
+  min-height: 40px;
 }
 
 .search-input-group:focus-within {
-  border-color: var(--cyber);
-  box-shadow: 0 0 0 3px rgba(0, 255, 255, 0.1);
+  /* No border highlight on focus */
 }
 
 .search-input {
   flex: 1;
-  padding: 8px 10px;
+  padding: 10px 12px;
   background: transparent;
   border: none;
   color: var(--text);
@@ -647,6 +656,8 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
   font-family: inherit;
   outline: none;
   min-width: 0;
+  box-shadow: none !important;
+  margin: 0;
 }
 
 .search-input::placeholder {
@@ -665,6 +676,8 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
   justify-content: center;
   min-width: 40px;
   flex-shrink: 0;
+  border-radius: 30px;
+  margin-left: 10px;
 }
 
 .search-btn:hover {
@@ -689,6 +702,7 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
   text-decoration: none;
   min-width: 30px;
   flex-shrink: 0;
+  border-radius: 30px;
 }
 
 .clear-search-btn:hover {

@@ -18,7 +18,7 @@
 
   <!-- Profile Section -->
   <section class="section">
-    <div style="max-width: 500px; margin: 0 auto;">
+    <div style="max-width: 500px; margin: 0 auto; width: fit-content;">
       <div class="profile-card-compact">
         <div class="profile-content-compact">
           <form id="nickname-form" class="nickname-form-compact">
@@ -38,11 +38,6 @@
                 <button type="submit" class="btn btn-primary-compact" id="save-nickname-btn">
                   <span id="save-btn-text">💾 SAVE</span>
                 </button>
-                {% if user_nickname %}
-                <button type="button" class="btn btn-secondary-compact" onclick="deleteNickname()">
-                  <span>🗑️ REMOVE</span>
-                </button>
-                {% endif %}
               </div>
             </div>
           </form>
@@ -61,7 +56,7 @@
       </div>
 
       <!-- Search Bar -->
-      <div class="search-container" style="justify-content: flex-end;">
+      <div class="search-container">
         <form class="search-form" method="GET" action="{{ url_for('my_games') }}">
           <div class="search-input-group">
             <input 
@@ -274,32 +269,6 @@ function saveNickname() {
   });
 }
 
-function deleteNickname() {
-  if (confirm('Are you sure you want to remove your nickname? This will make your games display with your user ID instead.')) {
-    fetch('/delete-nickname', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success) {
-        App.showAlert('Nickname removed successfully!', 'success');
-        // Reload the page to update the display
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      } else {
-        App.showAlert(data.error || 'Failed to remove nickname', 'error');
-      }
-    })
-    .catch(error => {
-      console.error('Delete nickname error:', error);
-      App.showAlert('Failed to remove nickname', 'error');
-    });
-  }
-}
 
 function updateCurrentNicknameDisplay(nickname) {
   const currentNicknameDiv = document.querySelector('.current-nickname');
@@ -317,9 +286,6 @@ function updateCurrentNicknameDisplay(nickname) {
       currentNicknameDiv.innerHTML = `
         <span class="nickname-label">Current nickname:</span>
         <span class="nickname-value">${nickname}</span>
-        <button class="btn btn-secondary btn-sm" onclick="deleteNickname()">
-          <span>🗑️ REMOVE</span>
-        </button>
       `;
       profileContent.appendChild(currentNicknameDiv);
     }
@@ -451,6 +417,7 @@ function updateCurrentNicknameDisplay(nickname) {
   position: relative;
   overflow: hidden;
   transition: all 0.3s ease;
+  border-radius: 30px;
 }
 
 .btn-secondary:hover {
@@ -516,6 +483,8 @@ function updateCurrentNicknameDisplay(nickname) {
   border-radius: 8px;
   overflow: hidden;
   margin-bottom: 20px;
+  width: fit-content;
+  min-width: 0;
 }
 
 .profile-content-compact {
@@ -555,6 +524,8 @@ function updateCurrentNicknameDisplay(nickname) {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: nowrap;
+  justify-content: center;
 }
 
 .form-input-compact {
@@ -583,7 +554,7 @@ function updateCurrentNicknameDisplay(nickname) {
   border: 2px solid var(--cyber);
   color: #ffffff;
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 30px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -613,7 +584,7 @@ function updateCurrentNicknameDisplay(nickname) {
   border: 2px solid var(--line);
   color: #ff4444;
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 30px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -624,6 +595,8 @@ function updateCurrentNicknameDisplay(nickname) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
+  max-width: fit-content;
 }
 
 .btn-secondary-compact:hover {
@@ -685,7 +658,7 @@ function updateCurrentNicknameDisplay(nickname) {
   
   .input-group-compact {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
     justify-content: center;
   }
@@ -697,9 +670,10 @@ function updateCurrentNicknameDisplay(nickname) {
   
   .btn-primary-compact,
   .btn-secondary-compact {
-    flex: 1;
+    flex-shrink: 0;
     min-width: 80px;
     justify-content: center;
+    max-width: fit-content;
   }
 }
 </style>
