@@ -2037,6 +2037,13 @@ def api_get_user_credits():
         logger.error(f"Error getting user credits: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@app.before_request
+def force_https():
+    """Force HTTPS for production and ensure proper static file serving"""
+    if app.config['FLASK_ENV'] == 'production':
+        if not request.is_secure and request.headers.get('X-Forwarded-Proto') != 'https':
+            return redirect(request.url.replace('http://', 'https://', 1))
+
 if __name__ == '__main__':
     # Check Supabase connection
     if supabase_manager.is_connected():
