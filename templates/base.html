@@ -20,7 +20,9 @@
   <header>
     <nav class="nav" aria-label="Main">
       <a class="logo" href="{{ url_for('index') }}" aria-label="GlitchPeach Home">
-        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="GlitchPeachAI Logo" class="logo-img">
+        <div class="logo-img-container">
+          <img src="{{ url_for('static', filename='images/logo.png') }}" alt="GlitchPeachAI Logo" class="logo-img">
+        </div>
         <b>GlitchPeach</b>
         <small>• v0.1</small>
       </a>

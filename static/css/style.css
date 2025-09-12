@@ -54,17 +54,32 @@ header{ position:sticky; top:0; z-index:10; border-bottom:2px solid var(--line);
 .nav{ max-width:1200px; margin:0 auto; padding: 14px 18px; display:flex; align-items:center; justify-content:space-between; }
 
 .logo{ display:flex; align-items:center; gap:10px; color:var(--fg); text-decoration:none; }
+
+.logo-img-container {
+  width: 60px !important;
+  height: 60px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
 .chip{ width:22px; height:22px; position:relative; }
 .chip::before, .chip::after{ content:""; position:absolute; inset:0; }
 .chip::before{ background: conic-gradient(from 0turn,var(--neon),var(--cyber),var(--neon)); filter: saturate(120%); }
 .chip::after{ inset:3px; background:var(--bg); }
 
 .logo-img{ 
-  width: 60px; 
-  height: 60px; 
+  width: 60px !important; 
+  height: 60px !important; 
+  max-width: 60px !important;
+  max-height: 60px !important;
+  min-width: 60px !important;
+  min-height: 60px !important;
   object-fit: contain; 
   image-rendering: pixelated;
   filter: drop-shadow(0 0 6px rgba(157, 123, 255, 0.4));
+  display: block;
 }
 .logo b{ font-size:12px; text-transform:uppercase; }
 .logo small{ color:var(--muted); font-size:10px; }
@@ -596,9 +611,18 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
   .modal-content { width: 95%; }
   
   /* Smaller logo on mobile */
+  .logo-img-container {
+    width: 45px !important;
+    height: 45px !important;
+  }
+  
   .logo-img {
-    width: 45px;
-    height: 45px;
+    width: 45px !important;
+    height: 45px !important;
+    max-width: 45px !important;
+    max-height: 45px !important;
+    min-width: 45px !important;
+    min-height: 45px !important;
   }
   
   .games-grid {
