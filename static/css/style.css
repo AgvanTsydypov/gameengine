@@ -60,13 +60,11 @@ header{ position:sticky; top:0; z-index:10; border-bottom:2px solid var(--line);
 .chip::after{ inset:3px; background:var(--bg); }
 
 .logo-img{ 
-  width: 40px; 
-  height: 40px; 
+  width: 60px; 
+  height: 60px; 
   object-fit: contain; 
   image-rendering: pixelated;
   filter: drop-shadow(0 0 6px rgba(157, 123, 255, 0.4));
-  transform: scale(1.5);
-  transform-origin: center;
 }
 .logo b{ font-size:12px; text-transform:uppercase; }
 .logo small{ color:var(--muted); font-size:10px; }
@@ -421,7 +419,8 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
 }
 
 .game-thumbnail:hover img {
-  transform: scale(1.05);
+  transform: translateY(-2px);
+  filter: brightness(1.1);
 }
 
 .game-title {
@@ -596,6 +595,12 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
   .nav { padding: 14px 12px; }
   .modal-content { width: 95%; }
   
+  /* Smaller logo on mobile */
+  .logo-img {
+    width: 45px;
+    height: 45px;
+  }
+  
   .games-grid {
     grid-template-columns: 1fr;
     gap: 16px;
@@ -682,7 +687,7 @@ footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted);
 
 .search-btn:hover {
   background: #00cccc;
-  transform: scale(1.05);
+  transform: translateY(-1px);
 }
 
 .search-icon {
