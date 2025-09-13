@@ -123,18 +123,24 @@ def check_auth_settings():
     """Provide guidance on auth settings"""
     logger.info("⚙️  Authentication Settings Checklist:")
     logger.info("   Go to your Supabase dashboard > Authentication > Settings")
-    logger.info("   For DEVELOPMENT:")
-    logger.info("   1. ✅ Site URL: http://localhost:5000")
+    logger.info("   The app now automatically uses the correct URLs based on FLASK_ENV:")
+    logger.info("   ")
+    logger.info("   For DEVELOPMENT (FLASK_ENV=development):")
+    logger.info("   1. ✅ Site URL: http://localhost:8888")
     logger.info("   2. ✅ Auto Confirm: Enable for development")
     logger.info("   3. ✅ Email Confirmations: Disable for development") 
     logger.info("   4. ✅ Phone Confirmations: Disable for development")
-    logger.info("   5. ✅ Redirect URLs: Add http://localhost:5000/callback")
-    logger.info("   For PRODUCTION (glitchpeach.com):")
+    logger.info("   5. ✅ Redirect URLs: Add http://localhost:8888/callback")
+    logger.info("   ")
+    logger.info("   For PRODUCTION (FLASK_ENV=production):")
     logger.info("   1. ✅ Site URL: https://glitchpeach.com")
     logger.info("   2. ✅ Auto Confirm: Disable (enable email confirmations)")
     logger.info("   3. ✅ Email Confirmations: Enable")
     logger.info("   4. ✅ Phone Confirmations: Disable")
     logger.info("   5. ✅ Redirect URLs: Add https://glitchpeach.com/callback")
+    logger.info("   ")
+    logger.info("   💡 The email confirmation redirect URL is now automatically")
+    logger.info("      determined by the FLASK_ENV environment variable!")
 
 def check_database_schema():
     """Check if database schema is set up correctly"""

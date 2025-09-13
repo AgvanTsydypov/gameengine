@@ -1246,37 +1246,36 @@ def payment():
             'price': 1.00,
             'price_cents': 100,
             'name': 'Mini Pack',
-            'description': 'Great for testing a few games',
+            'description': '...',
             'price_per_credit': 0.167,
-            'payment_link_url': 'https://buy.stripe.com/test_fZu9AU2KC9Wv4IP3nk8g00h'
+            'payment_link_url': 'https://buy.stripe.com/test_3cI7sM3OGgkT7V1cXU8g00p'
         },
         {
             'credits': 50,
             'price': 5.00,
             'price_cents': 500,
             'name': 'Starter Pack',
-            'description': 'Perfect for trying out our AI game generation',
+            'description': '...',
             'price_per_credit': 0.100,
-            'payment_link_url': 'https://buy.stripe.com/test_9B66oIetk6Kjcbh8HE8g00i'
+            'payment_link_url': 'https://buy.stripe.com/test_cNi9AU3OGd8Hejp6zw8g00q'
         },
         {
             'credits': 120,
             'price': 10.00,
             'price_cents': 1000,
             'name': 'Creator Pack',
-            'description': 'Great for regular game creators',
-            'popular': True,
+            'description': '...',
             'price_per_credit': 0.083,
-            'payment_link_url': 'https://buy.stripe.com/test_fZufZi5WO7Onejpe1Y8g00j'
+            'payment_link_url': 'https://buy.stripe.com/test_9B6fZifxo2u34IP0b88g00r'
         },
         {
             'credits': 300,
             'price': 20.00,
             'price_cents': 2000,
             'name': 'Pro Pack',
-            'description': 'Best value for serious game developers',
+            'description': '...',
             'price_per_credit': 0.067,
-            'payment_link_url': 'https://buy.stripe.com/test_aFa4gA4SK6Kj1wD2jg8g00k'
+            'payment_link_url': 'https://buy.stripe.com/test_cNi8wQgBs7On2AH2jg8g00s'
         }
     ]
     
@@ -2051,5 +2050,5 @@ if __name__ == '__main__':
     else:
         logger.warning("⚠️  Supabase not connected. Check .env settings")
     
-    port = app.config.get('PORT', 5000)
+    port = app.config.get('PORT', 8888)
     app.run(debug=True, host='0.0.0.0', port=port)
