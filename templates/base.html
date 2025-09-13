@@ -92,6 +92,18 @@
   </div>
 
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  
+  <!-- Handle email confirmation redirects with URL fragments -->
+  <script>
+    // Check if we have auth tokens in the URL fragment
+    if (window.location.hash && window.location.hash.includes('access_token=')) {
+      console.log('Auth tokens found in URL fragment, redirecting to callback');
+      // Redirect to callback with the same URL but replace # with ?
+      const callbackUrl = window.location.href.replace('#', '/callback?');
+      window.location.href = callbackUrl;
+    }
+  </script>
+  
   {% block scripts %}{% endblock %}
 </body>
 </html>

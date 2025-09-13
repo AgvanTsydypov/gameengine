@@ -16,10 +16,29 @@ class Config:
     # SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///app.db')
     # SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # Supabase настройки
-    SUPABASE_URL = os.getenv('SUPABASE_URL', '')
-    SUPABASE_KEY = os.getenv('SUPABASE_KEY', '')
-    SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')
+    # Supabase настройки - динамически выбираются на основе FLASK_ENV
+    def _get_supabase_config():
+        """Get Supabase config based on FLASK_ENV"""
+        flask_env = os.getenv('FLASK_ENV', 'development')
+        
+        if flask_env == 'production':
+            return {
+                'url': os.getenv('SUPABASE_URL', ''),
+                'key': os.getenv('SUPABASE_KEY', ''),
+                'service_role_key': os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')
+            }
+        else:
+            # Development - use dev-specific Supabase project
+            return {
+                'url': os.getenv('SUPABASE_URL_DEV', os.getenv('SUPABASE_URL', '')),
+                'key': os.getenv('SUPABASE_KEY_DEV', os.getenv('SUPABASE_KEY', '')),
+                'service_role_key': os.getenv('SUPABASE_SERVICE_ROLE_KEY_DEV', os.getenv('SUPABASE_SERVICE_ROLE_KEY', ''))
+            }
+    
+    supabase_config = _get_supabase_config()
+    SUPABASE_URL = supabase_config['url']
+    SUPABASE_KEY = supabase_config['key']
+    SUPABASE_SERVICE_ROLE_KEY = supabase_config['service_role_key']
     
     # Stripe настройки
     STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY', '')
@@ -57,6 +76,7 @@ class Config:
     # Динамически определяется на основе FLASK_ENV
     @property
     def BASE_URL(self):
+        """Get BASE_URL based on FLASK_ENV - dynamically evaluated"""
         flask_env = os.getenv('FLASK_ENV', 'development')
         
         # FLASK_ENV takes priority - if development, always use localhost

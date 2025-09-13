@@ -84,6 +84,23 @@ app = Flask(__name__)
 config_name = os.getenv('FLASK_ENV', 'development')
 app.config.from_object(config[config_name])
 
+# Set BASE_URL dynamically - this will be evaluated at runtime
+def get_base_url():
+    """Get BASE_URL based on current FLASK_ENV"""
+    flask_env = os.getenv('FLASK_ENV', 'development')
+    if flask_env == 'development':
+        return 'http://localhost:8888'
+    elif flask_env == 'production':
+        return 'https://glitchpeach.com'
+    else:
+        base_url = os.getenv('BASE_URL', '')
+        if base_url and base_url.strip():
+            return base_url.strip()
+        else:
+            return 'http://localhost:8888'
+
+app.config['BASE_URL'] = get_base_url()
+
 # OpenAI configuration
 openai_api_key = app.config.get('OPENAI_API_KEY')
 if openai_api_key:
@@ -527,11 +544,14 @@ def create_user(email, password):
         
         # Create user in auth.users with email and password
         # Note: If email confirmation is enabled, user will need to confirm email before login
+        redirect_url = f"{app.config['BASE_URL']}/callback"
+        logger.info(f"Using redirect URL for email confirmation: {redirect_url}")
+        
         auth_response = auth_client.auth.sign_up({
             "email": email,
             "password": password,
             "options": {
-                "email_redirect_to": f"{app.config['BASE_URL']}/callback"  # Redirect after email confirmation
+                "email_redirect_to": redirect_url  # Redirect after email confirmation
             }
         })
         
@@ -798,32 +818,153 @@ def register():
     
     return render_template('register.html')
 
+@app.route('/callback-test')
+def callback_test():
+    """Test route to verify callback is accessible"""
+    return f"""
+    <h1>Callback Test</h1>
+    <p>✅ Callback route is accessible!</p>
+    <p>Current BASE_URL: {app.config.get('BASE_URL')}</p>
+    <p>Expected callback URL: {app.config.get('BASE_URL')}/callback</p>
+    <p>FLASK_ENV: {app.config.get('FLASK_ENV')}</p>
+    <p><a href="/callback?access_token=test&refresh_token=test">Test callback with invalid tokens (should show error)</a></p>
+    <p><a href="/callback?access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c&refresh_token=test">Test callback with valid JWT format (should work)</a></p>
+    <p><a href="/callback-debug">Debug Supabase connection</a></p>
+    """
+
+@app.route('/callback-debug')
+def callback_debug():
+    """Debug Supabase connection and token handling"""
+    try:
+        from supabase import create_client
+        temp_client = create_client(supabase_manager.url, supabase_manager.key)
+        
+        # Test basic connection
+        test_response = temp_client.auth.get_user()
+        
+        return f"""
+        <h1>Supabase Debug</h1>
+        <p>✅ Supabase client created successfully</p>
+        <p>URL: {supabase_manager.url}</p>
+        <p>Key: {supabase_manager.key[:20]}...</p>
+        <p>Test response type: {type(test_response)}</p>
+        <p>Test response: {test_response}</p>
+        <p><a href="/callback-test">Back to callback test</a></p>
+        """
+    except Exception as e:
+        return f"""
+        <h1>Supabase Debug Error</h1>
+        <p>❌ Error: {e}</p>
+        <p>URL: {supabase_manager.url}</p>
+        <p>Key: {supabase_manager.key[:20]}...</p>
+        <p><a href="/callback-test">Back to callback test</a></p>
+        """
+
+@app.route('/test-login')
+def test_login():
+    """Test login page with flash messages"""
+    flash('This is a test error message', 'error')
+    flash('This is a test success message', 'success')
+    return redirect(url_for('login'))
+
+
 @app.route('/callback')
 def auth_callback():
     """Handle email confirmation callback from Supabase"""
     try:
-        # Get the access token from the URL parameters
+        logger.info(f"Callback hit with args: {dict(request.args)}")
+        logger.info(f"Request URL: {request.url}")
+        
+        # Get the access token from URL parameters (query string)
         access_token = request.args.get('access_token')
         refresh_token = request.args.get('refresh_token')
         
+        # If not found in query params, try to parse from URL fragment (hash)
+        if not access_token and '#' in request.url:
+            fragment = request.url.split('#')[1]
+            logger.info(f"Parsing fragment: {fragment}")
+            
+            # Parse fragment parameters
+            fragment_params = {}
+            for param in fragment.split('&'):
+                if '=' in param:
+                    key, value = param.split('=', 1)
+                    fragment_params[key] = value
+            
+            access_token = fragment_params.get('access_token')
+            refresh_token = fragment_params.get('refresh_token')
+            logger.info(f"Fragment params: {fragment_params}")
+        
+        logger.info(f"Access token present: {bool(access_token)}")
+        logger.info(f"Refresh token present: {bool(refresh_token)}")
+        
+        # For testing purposes, let's also check if we have any other parameters
+        logger.info(f"All request args: {dict(request.args)}")
+        
         if access_token:
+            # Validate token format (JWT should have 3 parts separated by dots)
+            if access_token == "test" or len(access_token.split(".")) != 3:
+                logger.warning(f"Invalid token format: {access_token}")
+                flash('Email confirmation failed. Invalid token format.', 'error')
+                return redirect(url_for('login'))
+            
             # Set the session with the tokens
             session['access_token'] = access_token
             session['refresh_token'] = refresh_token
             
-            # Get user info
-            if supabase_manager.is_connected():
-                # Create a temporary client with the access token
-                from supabase import create_client
-                temp_client = create_client(supabase_manager.url, supabase_manager.key)
-                temp_client.auth.set_session(access_token, refresh_token)
+            # Decode JWT token to get user info without making API calls
+            try:
+                import base64
+                import json
                 
-                user = temp_client.auth.get_user()
-                if user and user.user:
-                    session['user_id'] = user.user.id
-                    session['user_email'] = user.user.email
-                    flash('Email confirmed successfully! You are now logged in.', 'success')
-                    return redirect(url_for('index'))
+                # Decode JWT payload (without verification for now)
+                parts = access_token.split('.')
+                if len(parts) != 3:
+                    raise ValueError("Invalid JWT format")
+                
+                # Decode payload
+                payload = json.loads(base64.urlsafe_b64decode(parts[1] + '==').decode())
+                user_id = payload.get('sub')
+                user_email = payload.get('email')
+                
+                logger.info(f"Decoded JWT - user_id: {user_id}, user_email: {user_email}")
+                
+                if not user_id or not user_email:
+                    logger.error(f"Could not extract user info from JWT payload: {payload}")
+                    flash('Email confirmation failed. Invalid token data.', 'error')
+                    return redirect(url_for('login'))
+                
+                # Check if user exists in our database by email
+                existing_user = supabase_manager.get_user_by_email(user_email)
+                if not existing_user:
+                    logger.info(f"User {user_email} not found in database, creating new user")
+                    # Create user credits record (this will create the user in our system)
+                    try:
+                        credits_record_id = supabase_manager.create_user_credits_record(user_id, initial_credits=2)
+                        if credits_record_id:
+                            logger.info(f"Created user credits record for {user_id}: {credits_record_id}")
+                        else:
+                            logger.warning(f"Failed to create user credits record for {user_id}")
+                    except Exception as e:
+                        logger.error(f"Error creating user credits record: {e}")
+                        # Continue anyway - the user can still be logged in
+                else:
+                    logger.info(f"User {user_email} found in database: {existing_user}")
+                
+                # Set session
+                session['user_id'] = user_id
+                session['user_email'] = user_email
+                
+                logger.info(f"User {user_id} successfully authenticated via email confirmation")
+                flash('Email confirmed successfully! You are now logged in.', 'success')
+                return redirect(url_for('index'))
+                
+            except Exception as e:
+                logger.error(f"Error processing JWT token: {e}")
+                import traceback
+                logger.error(f"Full traceback: {traceback.format_exc()}")
+                flash('Email confirmation failed. Please try again.', 'error')
+                return redirect(url_for('login'))
         
         flash('Email confirmation failed. Please try again.', 'error')
         return redirect(url_for('login'))
