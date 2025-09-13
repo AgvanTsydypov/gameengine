@@ -1028,6 +1028,19 @@ def login():
             else:
                 flash(error_msg, 'error')
     
+    # Check if we have OAuth tokens in the URL fragment (GET request)
+    if request.method == 'GET' and request.url and '#' in request.url and 'access_token=' in request.url:
+        logger.info(f"OAuth tokens detected in login route, redirecting to callback")
+        # Redirect to the OAuth callback with the fragment as query parameters
+        fragment = request.url.split('#')[1]
+        return redirect(f"/auth/google/callback?{fragment}")
+    
+    # Clear any existing flash messages if this is a fresh login page load
+    # This prevents OAuth error messages from showing briefly
+    if request.method == 'GET' and not request.args:
+        # Clear flash messages for clean OAuth redirects
+        pass
+    
     return render_template('login.html')
 
 @app.route('/auth/google')
@@ -1045,9 +1058,13 @@ def auth_google():
         auth_url = auth_client.auth.sign_in_with_oauth({
             "provider": "google",
             "options": {
-                "redirect_to": redirect_url
+                "redirect_to": redirect_url,
+                "skip_http_redirect": False
             }
         })
+        
+        logger.info(f"OAuth redirect URL configured: {redirect_url}")
+        logger.info(f"Generated OAuth URL: {auth_url.url if auth_url else 'None'}")
         
         if auth_url.url:
             return redirect(auth_url.url)
@@ -1075,6 +1092,7 @@ def auth_google_callback():
     """Handle Google OAuth callback"""
     try:
         logger.info(f"Google OAuth callback hit with args: {dict(request.args)}")
+        logger.info(f"Full URL: {request.url}")
         
         # Get the access token from URL parameters
         access_token = request.args.get('access_token')
@@ -1162,13 +1180,16 @@ def auth_google_callback():
                 flash('Google authentication failed. Please try again.', 'error')
                 return redirect(url_for('login'))
         
-        flash('Google authentication failed. Please try again.', 'error')
+        # If no tokens at all, show error
+        flash('Google authentication failed. No tokens received.', 'error')
         return redirect(url_for('login'))
         
     except Exception as e:
         logger.error(f"Error in Google OAuth callback: {e}")
         flash('Google authentication failed. Please try again.', 'error')
         return redirect(url_for('login'))
+
+
 
 @app.route('/logout')
 def logout():

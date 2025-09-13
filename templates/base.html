@@ -13,6 +13,25 @@
 
   {# Per-page extra styles/meta/scripts can be injected here #}
   {% block extra_head %}{% endblock %}
+  
+  <!-- Handle Google OAuth callback with URL fragments - Execute before page renders -->
+  <script>
+    // Check if we have auth tokens in the URL fragment
+    if (window.location.hash && window.location.hash.includes('access_token=')) {
+      console.log('Auth tokens found in URL fragment, redirecting to callback');
+      
+      // Extract the fragment part
+      const fragment = window.location.hash.substring(1); // Remove the #
+      
+      // Build the correct callback URL using the current origin
+      const callbackUrl = window.location.origin + '/auth/google/callback?' + fragment;
+      
+      console.log('Redirecting to:', callbackUrl);
+      
+      // Redirect immediately without showing the page content
+      window.location.replace(callbackUrl);
+    }
+  </script>
 </head>
 <body data-authenticated="{{ 'true' if session.user_id else 'false' }}">
   <!-- Background layers (click-through) -->
@@ -61,17 +80,6 @@
 
 
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-  
-  <!-- Handle email confirmation redirects with URL fragments -->
-  <script>
-    // Check if we have auth tokens in the URL fragment
-    if (window.location.hash && window.location.hash.includes('access_token=')) {
-      console.log('Auth tokens found in URL fragment, redirecting to callback');
-      // Redirect to callback with the same URL but replace # with ?
-      const callbackUrl = window.location.href.replace('#', '/callback?');
-      window.location.href = callbackUrl;
-    }
-  </script>
   
   {% block scripts %}{% endblock %}
 </body>
