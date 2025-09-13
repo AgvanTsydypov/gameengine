@@ -42,32 +42,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize authentication state
     updateAuthState();
 
-    // Modal functionality
+    // Publish and Update modals (keeping these for game creation/editing)
     const modals = {
-        login: document.getElementById('login-modal'),
-        register: document.getElementById('register-modal'),
         publish: document.getElementById('publish-modal'),
         update: document.getElementById('update-modal')
     };
-
-    function openModal(modalId) {
-        closeAllModals();
-        if (modals[modalId]) {
-            modals[modalId].classList.add('active');
-            bleep(880, 0.1);
-            
-            // Clear forms and alerts when opening modal
-            clearModalData(modalId);
-        }
-    }
-
-    function closeAllModals() {
-        Object.values(modals).forEach(modal => {
-            if (modal) {
-                modal.classList.remove('active');
-            }
-        });
-    }
 
     function clearModalData(modalId) {
         // Clear any existing global alerts
@@ -76,45 +55,7 @@ document.addEventListener('DOMContentLoaded', function() {
             existingAlert.remove();
         }
         
-        if (modalId === 'login') {
-            // Clear login form
-            const loginForm = document.getElementById('login-form');
-            if (loginForm) {
-                loginForm.reset();
-            }
-            
-            // Clear login alerts
-            const loginAlert = document.getElementById('login-alert');
-            if (loginAlert) {
-                loginAlert.innerHTML = '';
-            }
-            
-            // Remove loading state from submit button
-            const loginSubmitBtn = loginForm?.querySelector('button[type="submit"]');
-            if (loginSubmitBtn) {
-                loginSubmitBtn.classList.remove('loading');
-                loginSubmitBtn.disabled = false;
-            }
-        } else if (modalId === 'register') {
-            // Clear register form
-            const registerForm = document.getElementById('register-form');
-            if (registerForm) {
-                registerForm.reset();
-            }
-            
-            // Clear register alerts
-            const registerAlert = document.getElementById('register-alert');
-            if (registerAlert) {
-                registerAlert.innerHTML = '';
-            }
-            
-            // Remove loading state from submit button
-            const registerSubmitBtn = registerForm?.querySelector('button[type="submit"]');
-            if (registerSubmitBtn) {
-                registerSubmitBtn.classList.remove('loading');
-                registerSubmitBtn.disabled = false;
-            }
-        } else if (modalId === 'publish') {
+        if (modalId === 'publish') {
             // Clear publish form
             const publishForm = document.getElementById('publish-form');
             if (publishForm) {
@@ -171,70 +112,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Modal event listeners
-    if (modals.login) {
-        // Open login modal
-        document.getElementById('login-btn')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            openModal('login');
-        });
-
-        // Close login modal
-        modals.login.querySelector('.modal-close')?.addEventListener('click', () => {
-            closeAllModals();
-            clearModalData('login');
-        });
-        modals.login.addEventListener('click', (e) => {
-            if (e.target === modals.login) {
-                closeAllModals();
-                clearModalData('login');
-            }
-        });
-
-        // Switch to register
-        document.getElementById('switch-to-register')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            openModal('register');
-        });
-    }
-
-    if (modals.register) {
-        // Open register modal
-        document.getElementById('create-account-btn')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            openModal('register');
-        });
-
-        // Close register modal
-        modals.register.querySelector('.modal-close')?.addEventListener('click', () => {
-            closeAllModals();
-            clearModalData('register');
-        });
-        modals.register.addEventListener('click', (e) => {
-            if (e.target === modals.register) {
-                closeAllModals();
-                clearModalData('register');
-            }
-        });
-
-        // Switch to login
-        document.getElementById('switch-to-login')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            openModal('login');
-        });
-    }
-
     // Close modals with Escape key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            // Check which modal is currently open and clear its data
-            if (modals.login && modals.login.classList.contains('active')) {
-                closeAllModals();
-                clearModalData('login');
-            } else if (modals.register && modals.register.classList.contains('active')) {
-                closeAllModals();
-                clearModalData('register');
-            } else if (modals.publish && modals.publish.style.display === 'flex') {
+            if (modals.publish && modals.publish.style.display === 'flex') {
                 closePublishModal();
                 clearModalData('publish');
             } else if (modals.update && modals.update.style.display === 'flex') {
@@ -249,7 +130,7 @@ document.addEventListener('DOMContentLoaded', function() {
         el.addEventListener('click', (e) => {
             e.preventDefault();
             showAlert('Please log in to access this feature', 'error');
-            openModal('login');
+            window.location.href = '/login';
         });
     });
 
@@ -287,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Form submission handlers
+    // Form submission handlers for auth pages (now on separate pages)
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
 
@@ -297,7 +178,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const formData = new FormData(loginForm);
             const submitBtn = loginForm.querySelector('button[type="submit"]');
-            const alertContainer = document.getElementById('login-alert');
+            const alertContainer = document.getElementById('login-alert') || document.querySelector('.auth-body');
             
             // Loading state
             submitBtn.classList.add('loading');
@@ -319,29 +200,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     const result = await response.json();
                     
                     if (response.ok && result.success) {
-                        // Success - reload page to update auth state
+                        // Success - redirect to home page or specified redirect
                         showAlert('Login successful!', 'success');
-                        closeAllModals();
                         setTimeout(() => {
-                            window.location.reload();
+                            window.location.href = result.redirect || '/';
                         }, 500);
                     } else {
                         const errorMessage = result.error || 'Invalid email or password';
                         showAlert(errorMessage, 'error', alertContainer);
                     }
                 } else {
-                    // HTML response (fallback)
-                    const result = await response.text();
-                    
-                    if (response.ok && result.includes('Successfully logged in')) {
-                        showAlert('Login successful!', 'success');
-                        closeAllModals();
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 500);
-                    } else {
-                        showAlert('Invalid email or password', 'error', alertContainer);
-                    }
+                    // HTML response (fallback) - redirect to home page
+                    window.location.href = '/';
                 }
             } catch (error) {
                 console.error('Login error:', error);
@@ -361,7 +231,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const password = formData.get('password');
             const confirmPassword = formData.get('confirm_password');
             const submitBtn = registerForm.querySelector('button[type="submit"]');
-            const alertContainer = document.getElementById('register-alert');
+            const alertContainer = document.getElementById('register-alert') || document.querySelector('.auth-body');
             
             // Validate passwords match
             if (password !== confirmPassword) {
@@ -392,11 +262,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (result.email_confirmation_required) {
                             // Show email verification alert
                             showAlert('Registration successful! Please check your email and click the confirmation link to complete your registration.', 'warning', alertContainer);
-                            // Don't redirect to login, stay on register page to show the alert
+                            // Stay on register page to show the alert
                         } else {
                             showAlert('Account created successfully! Please log in.', 'success', alertContainer);
                             setTimeout(() => {
-                                openModal('login');
+                                window.location.href = result.redirect || '/login';
                             }, 2000);
                         }
                     } else {
@@ -404,22 +274,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         showAlert(errorMessage, 'error', alertContainer);
                     }
                 } else {
-                    // HTML response (fallback)
-                    const result = await response.text();
-                    
-                    if (response.ok && result.includes('Registration successful')) {
-                        if (result.includes('check your email') || result.includes('confirmation link')) {
-                            // Show email verification alert
-                            showAlert('Registration successful! Please check your email and click the confirmation link to complete your registration.', 'warning', alertContainer);
-                        } else {
-                            showAlert('Account created successfully! Please log in.', 'success', alertContainer);
-                            setTimeout(() => {
-                                openModal('login');
-                            }, 2000);
-                        }
-                    } else {
-                        showAlert('Registration failed. Please try again.', 'error', alertContainer);
-                    }
+                    // HTML response (fallback) - redirect to login page
+                    window.location.href = '/login';
                 }
             } catch (error) {
                 console.error('Registration error:', error);

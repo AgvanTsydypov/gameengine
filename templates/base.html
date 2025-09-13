@@ -7,6 +7,8 @@
   <title>{% block title %}GlitchPeach{% endblock %}</title>
   <!-- Pixel/retro font -->
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
 
   {# Per-page extra styles/meta/scripts can be injected here #}
@@ -32,8 +34,8 @@
           <a class="btn btn-ghost" href="{{ url_for('my_games') }}"><span>PROFILE</span></a>
           <a class="btn btn-ghost" href="{{ url_for('logout') }}"><span>LOGOUT</span></a>
         {% else %}
-          <a class="btn btn-ghost" href="#" id="login-btn"><span>LOGIN</span></a>
-          <a class="btn btn-cta" href="#" id="create-account-btn"><span>CREATE ACCOUNT</span></a>
+          <a class="btn btn-ghost" href="{{ url_for('login') }}"><span>LOGIN</span></a>
+          <a class="btn btn-cta" href="{{ url_for('register') }}"><span>CREATE ACCOUNT</span></a>
         {% endif %}
       </div>
     </nav>
@@ -57,39 +59,6 @@
 
   <footer>© 2025 GlitchPeachAI — WHERE WORLDS ARE BORN</footer>
 
-  <!-- Modals (used by main.js) -->
-  <div class="modal-overlay" id="login-modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>LOGIN</h2>
-        <button class="modal-close" type="button">&times;</button>
-      </div>
-      <form class="modal-form" action="{{ url_for('login') }}" method="POST">
-        <input type="email" name="email" placeholder="Email" required>
-        <input type="password" name="password" placeholder="Password" required>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-cta">LOGIN</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="register-modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>CREATE ACCOUNT</h2>
-        <button class="modal-close" type="button">&times;</button>
-      </div>
-      <form class="modal-form" action="{{ url_for('register') }}" method="POST">
-        <input type="email" name="email" placeholder="Email" required>
-        <input type="password" name="password" placeholder="Password" required>
-        <input type="password" name="confirm_password" placeholder="Confirm Password" required>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-cta">CREATE ACCOUNT</button>
-        </div>
-      </form>
-    </div>
-  </div>
 
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   

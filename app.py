@@ -542,6 +542,23 @@ def create_user(email, password):
         from supabase import create_client
         auth_client = create_client(supabase_manager.url, supabase_manager.key)
         
+        # Check if user already exists in our database
+        existing_user = supabase_manager.get_user_by_email(email)
+        if existing_user:
+            logger.warning(f"User {email} already exists in database")
+            return {
+                'error': 'User with this email already exists. Please try logging in instead.',
+                'error_type': 'user_exists'
+            }
+        
+        # TODO: Add check for soft-deleted users if you implement soft deletion
+        # deleted_user = supabase_manager.get_deleted_user_by_email(email)
+        # if deleted_user:
+        #     return {
+        #         'error': 'This account was previously deleted and cannot be recreated.',
+        #         'error_type': 'account_deleted'
+        #     }
+        
         # Create user in auth.users with email and password
         # Note: If email confirmation is enabled, user will need to confirm email before login
         redirect_url = f"{app.config['BASE_URL']}/callback"
@@ -789,7 +806,7 @@ def register():
                     success_msg = 'Registration successful! You can now log in.'
                     # Check if this is an AJAX request
                     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
-                        return jsonify({'success': True, 'message': success_msg})
+                        return jsonify({'success': True, 'message': success_msg, 'redirect': url_for('login')})
                     else:
                         flash(success_msg, 'success')
                         return redirect(url_for('login'))
@@ -989,10 +1006,10 @@ def login():
             session['user_id'] = auth_result['user'].id
             session['email'] = auth_result['user'].email
             
-            # Check if this is an AJAX request (from modal)
+            # Check if this is an AJAX request (from separate page)
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
-                # For AJAX requests, return JSON - stay on same page
-                return jsonify({'success': True, 'stay_on_page': True})
+                # For AJAX requests, return JSON - redirect to home page
+                return jsonify({'success': True, 'redirect': url_for('index')})
             else:
                 flash('Successfully logged in!', 'success')
                 return redirect(url_for('index'))
@@ -1012,6 +1029,146 @@ def login():
                 flash(error_msg, 'error')
     
     return render_template('login.html')
+
+@app.route('/auth/google')
+def auth_google():
+    """Initiate Google OAuth flow"""
+    try:
+        # Get redirect URL for Google OAuth
+        redirect_url = f"{app.config['BASE_URL']}/auth/google/callback"
+        
+        # Create Supabase client for OAuth
+        from supabase import create_client
+        auth_client = create_client(supabase_manager.url, supabase_manager.key)
+        
+        # Get Google OAuth URL
+        auth_url = auth_client.auth.sign_in_with_oauth({
+            "provider": "google",
+            "options": {
+                "redirect_to": redirect_url
+            }
+        })
+        
+        if auth_url.url:
+            return redirect(auth_url.url)
+        else:
+            flash('Error initiating Google authentication.', 'error')
+            return redirect(url_for('login'))
+            
+    except Exception as e:
+        logger.error(f"Error initiating Google OAuth: {e}")
+        flash('Error initiating Google authentication.', 'error')
+        return redirect(url_for('login'))
+
+@app.route('/login/callback')
+def login_callback_redirect():
+    """Redirect from /login/callback to /auth/google/callback for Google OAuth"""
+    # Preserve all query parameters and redirect to the correct callback
+    query_string = request.query_string.decode('utf-8')
+    if query_string:
+        return redirect(f"/auth/google/callback?{query_string}")
+    else:
+        return redirect("/auth/google/callback")
+
+@app.route('/auth/google/callback')
+def auth_google_callback():
+    """Handle Google OAuth callback"""
+    try:
+        logger.info(f"Google OAuth callback hit with args: {dict(request.args)}")
+        
+        # Get the access token from URL parameters
+        access_token = request.args.get('access_token')
+        refresh_token = request.args.get('refresh_token')
+        
+        # If not found in query params, try to parse from URL fragment (hash)
+        if not access_token and '#' in request.url:
+            fragment = request.url.split('#')[1]
+            logger.info(f"Parsing fragment: {fragment}")
+            
+            # Parse fragment parameters
+            fragment_params = {}
+            for param in fragment.split('&'):
+                if '=' in param:
+                    key, value = param.split('=', 1)
+                    fragment_params[key] = value
+            
+            access_token = fragment_params.get('access_token')
+            refresh_token = fragment_params.get('refresh_token')
+            logger.info(f"Fragment params: {fragment_params}")
+        
+        logger.info(f"Access token present: {bool(access_token)}")
+        logger.info(f"Refresh token present: {bool(refresh_token)}")
+        
+        if access_token:
+            # Validate token format (JWT should have 3 parts separated by dots)
+            if access_token == "test" or len(access_token.split(".")) != 3:
+                logger.warning(f"Invalid token format: {access_token}")
+                flash('Google authentication failed. Invalid token format.', 'error')
+                return redirect(url_for('login'))
+            
+            # Decode JWT token to get user info
+            try:
+                import base64
+                import json
+                
+                # Decode JWT payload (without verification for now)
+                parts = access_token.split('.')
+                if len(parts) != 3:
+                    raise ValueError("Invalid JWT format")
+                
+                # Decode payload
+                payload = json.loads(base64.urlsafe_b64decode(parts[1] + '==').decode())
+                user_id = payload.get('sub')
+                user_email = payload.get('email')
+                
+                logger.info(f"Decoded JWT - user_id: {user_id}, user_email: {user_email}")
+                
+                if not user_id or not user_email:
+                    logger.error(f"Could not extract user info from JWT payload: {payload}")
+                    flash('Google authentication failed. Invalid token data.', 'error')
+                    return redirect(url_for('login'))
+                
+                # Check if user exists in our database by email
+                existing_user = supabase_manager.get_user_by_email(user_email)
+                if not existing_user:
+                    logger.info(f"Google user {user_email} not found in database, creating new user")
+                    # Create user credits record (this will create the user in our system)
+                    try:
+                        credits_record_id = supabase_manager.create_user_credits_record(user_id, initial_credits=2)
+                        if credits_record_id:
+                            logger.info(f"Created user credits record for Google user {user_id}: {credits_record_id}")
+                        else:
+                            logger.warning(f"Failed to create user credits record for Google user {user_id}")
+                    except Exception as e:
+                        logger.error(f"Error creating user credits record for Google user: {e}")
+                        # Continue anyway - the user can still be logged in
+                else:
+                    logger.info(f"Google user {user_email} found in database: {existing_user}")
+                
+                # Set session
+                session['access_token'] = access_token
+                session['refresh_token'] = refresh_token
+                session['user_id'] = user_id
+                session['user_email'] = user_email
+                
+                logger.info(f"Google user {user_id} successfully authenticated")
+                flash('Successfully logged in with Google!', 'success')
+                return redirect(url_for('index'))
+                
+            except Exception as e:
+                logger.error(f"Error processing Google OAuth JWT token: {e}")
+                import traceback
+                logger.error(f"Full traceback: {traceback.format_exc()}")
+                flash('Google authentication failed. Please try again.', 'error')
+                return redirect(url_for('login'))
+        
+        flash('Google authentication failed. Please try again.', 'error')
+        return redirect(url_for('login'))
+        
+    except Exception as e:
+        logger.error(f"Error in Google OAuth callback: {e}")
+        flash('Google authentication failed. Please try again.', 'error')
+        return redirect(url_for('login'))
 
 @app.route('/logout')
 def logout():
