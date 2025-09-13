@@ -1539,43 +1539,43 @@ def payment():
     base_price_per_credit = 0.167  # Mini Pack price per credit as base
     
     credit_packages = [
-        {
-            'credits': 6,
-            'price': 1.00,
-            'price_cents': 100,
-            'name': 'Mini Pack',
-            'description': '...',
-            'price_per_credit': 0.167,
-            'payment_link_url': 'https://buy.stripe.com/test_3cI7sM3OGgkT7V1cXU8g00p'
-        },
-        {
-            'credits': 50,
-            'price': 5.00,
-            'price_cents': 500,
-            'name': 'Starter Pack',
-            'description': '...',
-            'price_per_credit': 0.100,
-            'payment_link_url': 'https://buy.stripe.com/test_cNi9AU3OGd8Hejp6zw8g00q'
-        },
-        {
-            'credits': 120,
-            'price': 10.00,
-            'price_cents': 1000,
-            'name': 'Creator Pack',
-            'description': '...',
-            'price_per_credit': 0.083,
-            'payment_link_url': 'https://buy.stripe.com/test_9B6fZifxo2u34IP0b88g00r'
-        },
-        {
-            'credits': 300,
-            'price': 20.00,
-            'price_cents': 2000,
-            'name': 'Pro Pack',
-            'description': '...',
-            'price_per_credit': 0.067,
-            'payment_link_url': 'https://buy.stripe.com/test_cNi8wQgBs7On2AH2jg8g00s'
-        }
-    ]
+    {
+        'credits': 6,
+        'price': 1.00,
+        'price_cents': 100,
+        'name': 'Mini Pack',
+        'description': '...',
+        'price_per_credit': 0.167,
+        'payment_link_url': 'https://buy.stripe.com/test_6oU8wQ9901pZejpf628g00t'
+    },
+    {
+        'credits': 50,
+        'price': 5.00,
+        'price_cents': 500,
+        'name': 'Starter Pack',
+        'description': '...',
+        'price_per_credit': 0.100,
+        'payment_link_url': 'https://buy.stripe.com/test_7sYcN60Cu3y78Z5f628g00u'
+    },
+    {
+        'credits': 120,
+        'price': 10.00,
+        'price_cents': 1000,
+        'name': 'Creator Pack',
+        'description': '...',
+        'price_per_credit': 0.083,
+        'payment_link_url': 'https://buy.stripe.com/test_fZufZi5WO1pZa391fc8g00v'
+    },
+    {
+        'credits': 300,
+        'price': 20.00,
+        'price_cents': 2000,
+        'name': 'Pro Pack',
+        'description': '...',
+        'price_per_credit': 0.067,
+        'payment_link_url': 'https://buy.stripe.com/test_eVqcN6dpg9Wv7V19LI8g00w'
+    }
+]
     
     # Calculate discount progression based on Mini Pack as base price
     for package in credit_packages:

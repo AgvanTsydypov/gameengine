@@ -67,6 +67,10 @@ def create_products_and_prices():
         
         # Create payment link with redirect URLs
         base_url = os.getenv('BASE_URL', 'http://localhost:8888')
+        if os.getenv('FLASK_ENV') == 'development':
+            base_url = 'http://localhost:8888'
+        else:
+            base_url = 'https://glitchpeach.com'
         payment_link = stripe.PaymentLink.create(
             line_items=[{
                 'price': price.id,
