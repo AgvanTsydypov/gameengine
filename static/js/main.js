@@ -42,6 +42,52 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize authentication state
     updateAuthState();
 
+    // Mobile menu toggle functionality
+    const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
+    const mobileMenu = document.querySelector('.mobile-menu');
+    
+    if (mobileMenuToggle && mobileMenu) {
+        mobileMenuToggle.addEventListener('click', function() {
+            const isExpanded = mobileMenuToggle.getAttribute('aria-expanded') === 'true';
+            
+            // Toggle menu visibility
+            if (isExpanded) {
+                mobileMenu.classList.remove('active');
+                mobileMenuToggle.setAttribute('aria-expanded', 'false');
+            } else {
+                mobileMenu.classList.add('active');
+                mobileMenuToggle.setAttribute('aria-expanded', 'true');
+            }
+            
+            // Add sound effect
+            bleep(640, 0.06);
+        });
+        
+        // Close mobile menu when clicking on a menu item
+        mobileMenu.addEventListener('click', function(e) {
+            if (e.target.closest('.btn')) {
+                mobileMenu.classList.remove('active');
+                mobileMenuToggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+        
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!mobileMenuToggle.contains(e.target) && !mobileMenu.contains(e.target)) {
+                mobileMenu.classList.remove('active');
+                mobileMenuToggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+        
+        // Close mobile menu on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && mobileMenu.classList.contains('active')) {
+                mobileMenu.classList.remove('active');
+                mobileMenuToggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
     // Publish and Update modals (keeping these for game creation/editing)
     const modals = {
         publish: document.getElementById('publish-modal'),
