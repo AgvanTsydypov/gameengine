@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Top Up Credits - Game Generator{% endblock %}
+{% block title %}Top Up Credits{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -27,6 +27,7 @@
     position:relative;
     display:flex;flex-direction:column;min-height:280px;
     outline:none;
+    text-align:center;
   }
   .credit-package:hover{
     border-color:#1ee4ff;                     /* cyber cyan hover */
@@ -72,16 +73,16 @@
   }
 
   /* ==== TYPO ==== */
-  .package-name{font-size:1.125rem;font-weight:600;color:#e6e6ea;margin-bottom:8px;}
-  .package-credits{font-size:.875rem;color:#1ee4ff;margin-bottom:12px;font-weight:600;}
+  .package-name{font-size:1.125rem;font-weight:600;color:#e6e6ea;margin-bottom:8px;text-align:center;}
+  .package-credits{font-size:.875rem;color:#1ee4ff;margin-bottom:12px;font-weight:600;text-align:center;}
   
-  .package-pricing{margin-bottom:8px;}
-  .package-price{font-size:1rem;color:#e6e6ea;font-weight:600;margin:0;}
+  .package-pricing{margin-bottom:8px;text-align:center;}
+  .package-price{font-size:1rem;color:#e6e6ea;font-weight:600;margin:0;text-align:center;}
   .package-original-price{
     font-size:.8rem;color:#98a0ab;text-decoration:line-through;margin-right:8px;
   }
   .package-savings{
-    font-size:.75rem;color:#1ee4ff;font-weight:600;margin-top:4px;
+    font-size:.75rem;color:#1ee4ff;font-weight:600;margin-top:4px;text-align:center;
   }
 
   /* ==== BUY BUTTON ==== */
@@ -112,7 +113,7 @@
     background:#1a1d27;border:2px solid #1ee4ff;border-radius:8px;padding:1rem;margin-bottom:2rem;text-align:center;
     box-shadow:0 0 15px rgba(30,228,255,.2);
   }
-  .balance-amount{font-size:1.5rem;font-weight:700;color:#1ee4ff;}
+  .balance-amount{font-size:1.5rem;font-weight:700;color:#1ee4ff;text-align:center;}
   
   .payment-info{
     background:#0f1117;border:2px solid #1a1d27;border-radius:8px;padding:1rem;margin-bottom:2rem;text-align:center;
@@ -125,8 +126,8 @@
     background:#1a1d27;border:2px solid #9d7bff;border-radius:8px;padding:1rem;margin:1rem 0;text-align:center;display:none;
     box-shadow:0 0 15px rgba(157,123,255,.2);
   }
-  .selection-info h3{color:#e6e6ea;margin:0 0 .5rem 0;}
-  .selection-info p{color:#98a0ab;margin:0;}
+  .selection-info h3{color:#e6e6ea;margin:0 0 .5rem 0;text-align:center;}
+  .selection-info p{color:#98a0ab;margin:0;text-align:center;}
   .selection-info.show{display:block;}
 </style>
 {% endblock %}
@@ -134,14 +135,14 @@
 {% block content %}
 <div class="container mx-auto px-4 py-8">
   <div class="max-w-6xl mx-auto">
-    <div class="text-center mb-8">
-      <h1 style="color:#e6e6ea;font-size:2.5rem;font-weight:bold;margin-bottom:1rem;text-shadow:0 0 10px rgba(157,123,255,.5);">Top Up Your Credits</h1>
-      <p style="color:#98a0ab;font-size:1.125rem;">Choose a credit package to continue creating amazing games with AI</p>
+    <div class="text-center mb-8" style="text-align:center;width:100%;">
+      <h1 style="color:#e6e6ea;font-size:2.5rem;font-weight:bold;margin-bottom:1rem;text-shadow:0 0 10px rgba(157,123,255,.5);text-align:center;width:100%;">Top Up Your Credits</h1>
+      <p style="color:#98a0ab;font-size:1.125rem;text-align:center;width:100%;">Choose a credit package to continue creating amazing games with AI</p>
     </div>
 
     <!-- Current Balance -->
     <div class="current-balance">
-      <p style="color:#98a0ab;margin-bottom:0.5rem;">Current Balance</p>
+      <p style="color:#98a0ab;margin-bottom:0.5rem;text-align:center;">Current Balance</p>
       <div class="balance-amount">{{ user_credits }} Credits</div>
     </div>
 
@@ -172,17 +173,17 @@
          <h3 class="package-name">{{ package.name }}</h3>
          <p class="package-credits">{{ package.credits }} Credits</p>
          
-         <div class="package-pricing">
-           {% if package.discount_percent > 0 %}
-             <div>
-               <span class="package-original-price">${{ "%.2f"|format(package.original_price) }}</span>
-               <span class="package-price">${{ "%.2f"|format(package.price) }}</span>
-             </div>
-             <div class="package-savings">Save ${{ "%.2f"|format(package.savings) }}</div>
-           {% else %}
-             <div class="package-price">${{ "%.2f"|format(package.price) }}</div>
-           {% endif %}
-         </div>
+        <div class="package-pricing">
+          {% if package.discount_percent > 0 %}
+            <div style="text-align:center;">
+              <span class="package-original-price">${{ "%.2f"|format(package.original_price) }}</span>
+              <span class="package-price">${{ "%.2f"|format(package.price) }}</span>
+            </div>
+            <div class="package-savings">Save ${{ "%.2f"|format(package.savings) }}</div>
+          {% else %}
+            <div class="package-price">${{ "%.2f"|format(package.price) }}</div>
+          {% endif %}
+        </div>
          
          {% if package.discount_percent > 0 %}
            <div class="discount-badge">{{ package.discount_percent }}% OFF</div>
@@ -272,7 +273,7 @@
     successDiv.style.marginBottom = '2rem';
     
     // Простое сообщение о успехе
-    successDiv.innerHTML = '<h3 style="color:#065f46;margin:0 0 0.5rem 0;">✅ Payment Successful!</h3><p style="color:#047857;margin:0;">Your payment was completed successfully! Credits have been added to your account. If you don\'t see the updated balance immediately, please refresh the page.</p>';
+    successDiv.innerHTML = '<h3 style="color:#065f46;margin:0 0 0.5rem 0;text-align:center;">✅ Payment Successful!</h3><p style="color:#047857;margin:0;text-align:center;">Your payment was completed successfully! Credits have been added to your account. If you don\'t see the updated balance immediately, please refresh the page.</p>';
     
     const container = document.querySelector('.max-w-6xl');
     if(container) {
