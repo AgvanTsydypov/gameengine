@@ -2365,6 +2365,11 @@ def terms():
     """Terms of Service page"""
     return render_template('terms.html')
 
+@app.route('/cookie')
+def cookie():
+    """Cookie Policy page"""
+    return render_template('cookie.html')
+
 @app.before_request
 def force_https():
     """Force HTTPS for production and ensure proper static file serving"""

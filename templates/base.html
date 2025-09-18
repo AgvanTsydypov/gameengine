@@ -10,6 +10,9 @@
   <!-- Font Awesome for icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+  
+  <!-- Termly Consent Banner -->
+  <script src="https://app.termly.io/resource-blocker/2ef224ce-7d99-43f9-a7eb-66e559ceeb20?autoBlock=on"></script>
 
   {# Per-page extra styles/meta/scripts can be injected here #}
   {% block extra_head %}{% endblock %}
@@ -84,6 +87,10 @@
           <a href="{{ url_for('privacy') }}">Privacy Policy</a>
           <span class="separator">•</span>
           <a href="{{ url_for('terms') }}">Terms of Service</a>
+          <span class="separator">•</span>
+          <a href="{{ url_for('cookie') }}">Cookie Policy</a>
+          <span class="separator">•</span>
+          <a href="#" class="termly-display-preferences">Consent Preferences</a>
         </div>
       </div>
       <div class="footer-contact">
