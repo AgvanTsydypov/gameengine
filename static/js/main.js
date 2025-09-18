@@ -20,7 +20,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add sound effects to buttons
     document.querySelectorAll('.btn').forEach(b => {
-        b.addEventListener('mouseenter', () => bleep(760, 0.05), { passive: true });
         b.addEventListener('click', () => bleep(520, 0.08), { passive: true });
     });
 
