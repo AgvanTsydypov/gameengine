@@ -76,7 +76,25 @@
 
   {% block content %}{% endblock %}
 
-  <footer>© 2025 GlitchPeachAI — WHERE WORLDS ARE BORN</footer>
+  <footer>
+    <div class="footer-content">
+      <div class="footer-main">
+        <p>© 2025 GlitchPeachAI — WHERE WORLDS ARE BORN</p>
+        <div class="footer-links">
+          <a href="{{ url_for('privacy') }}">Privacy Policy</a>
+          <span class="separator">•</span>
+          <a href="{{ url_for('terms') }}">Terms of Service</a>
+        </div>
+      </div>
+      <div class="footer-contact">
+        <p><strong>GlitchPeach, Inc.</strong></p>
+        <p>169 Madison Avenue<br>
+        New York, NY 10016<br>
+        United States</p>
+        <p><a href="mailto:info@glitchpeach.com">info@glitchpeach.com</a></p>
+      </div>
+    </div>
+  </footer>
 
 
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>

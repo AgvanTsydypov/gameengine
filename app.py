@@ -2355,6 +2355,16 @@ def api_get_user_credits():
         logger.error(f"Error getting user credits: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/privacy')
+def privacy():
+    """Privacy Policy page"""
+    return render_template('privacy.html')
+
+@app.route('/terms')
+def terms():
+    """Terms of Service page"""
+    return render_template('terms.html')
+
 @app.before_request
 def force_https():
     """Force HTTPS for production and ensure proper static file serving"""

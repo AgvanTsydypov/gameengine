@@ -497,7 +497,111 @@ h1{ margin:14px 0; font-size: clamp(22px, 5.5vw, 40px); line-height:1.25; text-s
 }
 
 /* Footer */
-footer{ border-top:2px solid var(--line); text-align:center; color:var(--muted); padding: 22px 18px 40px; font-size:10px; }
+footer{ 
+  border-top:2px solid var(--line); 
+  color:var(--muted); 
+  padding: 22px 18px 40px; 
+  font-size:10px; 
+  background: linear-gradient(180deg, #0c0f18, #0a0c14);
+}
+
+.footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.footer-main {
+  flex: 1;
+  text-align: left;
+}
+
+.footer-main p {
+  margin: 0 0 12px 0;
+  font-size: 10px;
+  color: var(--fg);
+}
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.footer-links a {
+  color: var(--cyber);
+  text-decoration: none;
+  font-size: 10px;
+  transition: color 0.2s ease;
+}
+
+.footer-links a:hover {
+  color: var(--neon);
+  text-decoration: underline;
+}
+
+.footer-links .separator {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.footer-contact {
+  text-align: right;
+  min-width: 200px;
+}
+
+.footer-contact p {
+  margin: 0 0 6px 0;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.footer-contact p:last-child {
+  margin-bottom: 0;
+}
+
+.footer-contact strong {
+  color: var(--fg);
+  font-size: 10px;
+}
+
+.footer-contact a {
+  color: var(--cyber);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.footer-contact a:hover {
+  color: var(--neon);
+  text-decoration: underline;
+}
+
+/* Mobile responsive footer */
+@media (max-width: 768px) {
+  .footer-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 20px;
+  }
+  
+  .footer-main {
+    text-align: center;
+  }
+  
+  .footer-contact {
+    text-align: center;
+    min-width: auto;
+  }
+  
+  .footer-links {
+    justify-content: center;
+  }
+}
 
 /* Focus */
 :is(a,button,input,textarea,select):focus-visible{ outline: 3px solid var(--cyber); outline-offset: 2px; }
