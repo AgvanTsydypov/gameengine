@@ -1,27 +1,27 @@
 // GlitchPeachAI - Pixel Theme JavaScript
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize audio for pixel-style UI sounds
-    const audioCtx = (window.AudioContext || window.webkitAudioContext) ? 
-        new (window.AudioContext || window.webkitAudioContext)() : null;
+    // Audio for pixel-style UI sounds (disabled)
+    // const audioCtx = (window.AudioContext || window.webkitAudioContext) ? 
+    //     new (window.AudioContext || window.webkitAudioContext)() : null;
     
-    function bleep(freq = 720, dur = 0.06) {
-        if (!audioCtx) return;
-        const o = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        o.type = 'square';
-        o.frequency.value = freq;
-        g.gain.value = 0.02;
-        o.connect(g);
-        g.connect(audioCtx.destination);
-        o.start();
-        setTimeout(() => o.stop(), dur * 1000);
-    }
+    // function bleep(freq = 720, dur = 0.06) {
+    //     if (!audioCtx) return;
+    //     const o = audioCtx.createOscillator();
+    //     const g = audioCtx.createGain();
+    //     o.type = 'square';
+    //     o.frequency.value = freq;
+    //     g.gain.value = 0.02;
+    //     o.connect(g);
+    //     g.connect(audioCtx.destination);
+    //     o.start();
+    //     setTimeout(() => o.stop(), dur * 1000);
+    // }
 
-    // Add sound effects to buttons
-    document.querySelectorAll('.btn').forEach(b => {
-        b.addEventListener('click', () => bleep(520, 0.08), { passive: true });
-    });
+    // Add sound effects to buttons (disabled)
+    // document.querySelectorAll('.btn').forEach(b => {
+    //     b.addEventListener('click', () => bleep(520, 0.08), { passive: true });
+    // });
 
     // Check if user is authenticated
     const isAuthenticated = document.body.dataset.authenticated === 'true';
@@ -58,8 +58,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 mobileMenuToggle.setAttribute('aria-expanded', 'true');
             }
             
-            // Add sound effect
-            bleep(640, 0.06);
+            // Sound effect disabled
+            // bleep(640, 0.06);
         });
         
         // Close mobile menu when clicking on a menu item

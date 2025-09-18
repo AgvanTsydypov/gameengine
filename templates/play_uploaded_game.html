@@ -5,7 +5,6 @@
 {% block content %}
 <main>
   <section class="hero">
-    <div class="kicker"><span class="dot"></span>PLAYING CREATED GAME</div>
     <h1>{{ game.title or 'Untitled Game' }}</h1>
     <p class="sub">
       {% if game.author_nickname %}
@@ -20,18 +19,23 @@
     <div style="max-width: 1200px; margin: 0 auto;">
       <!-- Game Container -->
       <div style="border: 2px solid var(--cyber); background: var(--card); padding: 0; margin-bottom: 40px; position: relative;">
-        <!-- Fullscreen Controls -->
-        <div id="fullscreen-controls" style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: flex; gap: 10px;">
-          <button class="btn btn-ghost" id="fullscreen-btn" onclick="toggleFullscreen()" style="font-size: 12px; padding: 8px 12px;">
-            <span>⛶ FULLSCREEN</span>
-          </button>
-          <button class="btn btn-ghost" id="exit-fullscreen-btn" onclick="exitFullscreen()" style="font-size: 12px; padding: 8px 12px; display: none;">
-            <span>✕ EXIT FULLSCREEN</span>
-          </button>
-        </div>
-
         <!-- Game Frame Container -->
         <div id="game-container" style="background: var(--bg); min-height: 600px; position: relative; overflow: hidden;">
+          <!-- Fullscreen Controls - Inside game container -->
+          <div id="fullscreen-controls" style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: flex; gap: 10px;">
+            <button class="btn btn-ghost fullscreen-btn" id="fullscreen-btn" onclick="toggleFullscreen()" style="font-size: 12px; padding: 8px 12px;">
+              <span id="fullscreen-text">⛶ FULLSCREEN</span>
+            </button>
+            <button class="btn btn-ghost exit-fullscreen-btn" id="exit-fullscreen-btn" onclick="exitFullscreen()" style="font-size: 12px; padding: 8px 12px; display: none;">
+              <span id="exit-fullscreen-text">✕ EXIT FULLSCREEN</span>
+            </button>
+          </div>
+          
+          <!-- Mobile Instructions -->
+          <div id="mobile-instructions" style="position: absolute; bottom: 10px; left: 10px; right: 10px; z-index: 1000; display: none; text-align: center; background: rgba(0, 0, 0, 0.8); color: white; padding: 8px; border-radius: 4px; font-size: 11px; transition: opacity 0.5s ease;">
+            <div>📱 Mobile: Double-tap to toggle fullscreen</div>
+            <div>Swipe up to exit fullscreen</div>
+          </div>
           <div id="game-loading" style="display: flex; align-items: center; justify-content: center; height: 600px; text-align: center;">
             <div>
               <div style="font-size: 24px; margin-bottom: 16px;">🎮</div>
@@ -165,35 +169,97 @@ function enterFullscreen() {
   const fullscreenBtn = document.getElementById('fullscreen-btn');
   const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn');
   const exitFullscreenActionBtn = document.getElementById('exit-fullscreen-action-btn');
-  
-  if (gameContainer.requestFullscreen) {
-    gameContainer.requestFullscreen();
-  } else if (gameContainer.webkitRequestFullscreen) {
-    gameContainer.webkitRequestFullscreen();
-  } else if (gameContainer.msRequestFullscreen) {
-    gameContainer.msRequestFullscreen();
-  }
-  
-  isFullscreen = true;
-  fullscreenBtn.style.display = 'none';
-  exitFullscreenBtn.style.display = 'block';
-  if (exitFullscreenActionBtn) exitFullscreenActionBtn.style.display = 'block';
-  
-  // Adjust iframe height for fullscreen
   const gameFrame = document.getElementById('game-frame');
-  if (gameFrame) {
-    gameFrame.style.height = '100vh';
-  }
+  
+  // Try different fullscreen methods for better mobile support
+  const fullscreenPromise = gameContainer.requestFullscreen?.() ||
+    gameContainer.webkitRequestFullscreen?.() ||
+    gameContainer.mozRequestFullScreen?.() ||
+    gameContainer.msRequestFullscreen?.() ||
+    // For mobile Safari and other mobile browsers
+    (gameFrame && gameFrame.webkitEnterFullscreen?.()) ||
+    Promise.reject('Fullscreen not supported');
+  
+  fullscreenPromise.then(() => {
+    isFullscreen = true;
+    fullscreenBtn.style.display = 'none';
+    exitFullscreenBtn.style.display = 'block';
+    if (exitFullscreenActionBtn) exitFullscreenActionBtn.style.display = 'block';
+    
+    // Adjust iframe height for fullscreen
+    if (gameFrame) {
+      gameFrame.style.height = '100vh';
+      gameFrame.style.width = '100vw';
+    }
+    
+    // Add mobile-specific classes
+    gameContainer.classList.add('mobile-fullscreen');
+    document.body.classList.add('fullscreen-active');
+    
+    // Lock orientation on mobile if supported
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {
+        // Orientation lock failed, continue anyway
+      });
+    }
+  }).catch((error) => {
+    console.warn('Fullscreen failed:', error);
+    // Fallback: try to make the game container take full viewport
+    if (gameContainer) {
+      gameContainer.style.position = 'fixed';
+      gameContainer.style.top = '0';
+      gameContainer.style.left = '0';
+      gameContainer.style.width = '100vw';
+      gameContainer.style.height = '100vh';
+      gameContainer.style.zIndex = '9999';
+      gameContainer.style.background = 'var(--bg)';
+      
+      isFullscreen = true;
+      fullscreenBtn.style.display = 'none';
+      exitFullscreenBtn.style.display = 'block';
+      if (exitFullscreenActionBtn) exitFullscreenActionBtn.style.display = 'block';
+      
+      if (gameFrame) {
+        gameFrame.style.height = '100vh';
+        gameFrame.style.width = '100vw';
+      }
+      
+      gameContainer.classList.add('mobile-fullscreen');
+      document.body.classList.add('fullscreen-active');
+    }
+  });
 }
 
 function exitFullscreen() {
+  const gameContainer = document.getElementById('game-container');
+  const gameFrame = document.getElementById('game-frame');
+  
+  // Try different exit fullscreen methods
   if (document.exitFullscreen) {
     document.exitFullscreen();
   } else if (document.webkitExitFullscreen) {
     document.webkitExitFullscreen();
+  } else if (document.mozCancelFullScreen) {
+    document.mozCancelFullScreen();
   } else if (document.msExitFullscreen) {
     document.msExitFullscreen();
+  } else if (gameFrame && gameFrame.webkitExitFullscreen) {
+    gameFrame.webkitExitFullscreen();
   }
+  
+  // Reset mobile fullscreen fallback
+  if (gameContainer && gameContainer.classList.contains('mobile-fullscreen')) {
+    gameContainer.style.position = '';
+    gameContainer.style.top = '';
+    gameContainer.style.left = '';
+    gameContainer.style.width = '';
+    gameContainer.style.height = '';
+    gameContainer.style.zIndex = '';
+    gameContainer.style.background = '';
+    gameContainer.classList.remove('mobile-fullscreen');
+  }
+  
+  document.body.classList.remove('fullscreen-active');
   
   isFullscreen = false;
   const fullscreenBtn = document.getElementById('fullscreen-btn');
@@ -204,13 +270,27 @@ function exitFullscreen() {
   exitFullscreenBtn.style.display = 'none';
   if (exitFullscreenActionBtn) exitFullscreenActionBtn.style.display = 'none';
   
-  // Reset iframe height
-  const gameFrame = document.getElementById('game-frame');
+  // Reset iframe dimensions to original size
   if (gameFrame) {
     gameFrame.style.height = '600px';
+    gameFrame.style.width = '100%';
   }
   
-  // Don't navigate away - just exit fullscreen and continue playing
+  // Reset game container to original size
+  if (gameContainer) {
+    gameContainer.style.width = '';
+    gameContainer.style.height = '';
+    gameContainer.style.position = '';
+    gameContainer.style.top = '';
+    gameContainer.style.left = '';
+    gameContainer.style.zIndex = '';
+    gameContainer.style.background = '';
+  }
+  
+  // Unlock orientation if it was locked
+  if (screen.orientation && screen.orientation.unlock) {
+    screen.orientation.unlock();
+  }
 }
 
 // Listen for fullscreen change events
@@ -221,10 +301,28 @@ document.addEventListener('msfullscreenchange', handleFullscreenChange);
 function handleFullscreenChange() {
   const isCurrentlyFullscreen = !!(document.fullscreenElement || 
                                   document.webkitFullscreenElement || 
+                                  document.mozFullScreenElement ||
                                   document.msFullscreenElement);
   
   if (!isCurrentlyFullscreen && isFullscreen) {
     // User exited fullscreen via browser controls - just update UI state
+    const gameContainer = document.getElementById('game-container');
+    const gameFrame = document.getElementById('game-frame');
+    
+    // Reset mobile fullscreen fallback
+    if (gameContainer && gameContainer.classList.contains('mobile-fullscreen')) {
+      gameContainer.style.position = '';
+      gameContainer.style.top = '';
+      gameContainer.style.left = '';
+      gameContainer.style.width = '';
+      gameContainer.style.height = '';
+      gameContainer.style.zIndex = '';
+      gameContainer.style.background = '';
+      gameContainer.classList.remove('mobile-fullscreen');
+    }
+    
+    document.body.classList.remove('fullscreen-active');
+    
     isFullscreen = false;
     const fullscreenBtn = document.getElementById('fullscreen-btn');
     const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn');
@@ -234,10 +332,26 @@ function handleFullscreenChange() {
     exitFullscreenBtn.style.display = 'none';
     if (exitFullscreenActionBtn) exitFullscreenActionBtn.style.display = 'none';
     
-    // Reset iframe height
-    const gameFrame = document.getElementById('game-frame');
+    // Reset iframe dimensions to original size
     if (gameFrame) {
       gameFrame.style.height = '600px';
+      gameFrame.style.width = '100%';
+    }
+    
+    // Reset game container to original size
+    if (gameContainer) {
+      gameContainer.style.width = '';
+      gameContainer.style.height = '';
+      gameContainer.style.position = '';
+      gameContainer.style.top = '';
+      gameContainer.style.left = '';
+      gameContainer.style.zIndex = '';
+      gameContainer.style.background = '';
+    }
+    
+    // Unlock orientation if it was locked
+    if (screen.orientation && screen.orientation.unlock) {
+      screen.orientation.unlock();
     }
   }
 }
@@ -249,6 +363,48 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// Mobile touch support for fullscreen
+let touchStartY = 0;
+let touchStartTime = 0;
+
+document.addEventListener('touchstart', (e) => {
+  if (isFullscreen) {
+    touchStartY = e.touches[0].clientY;
+    touchStartTime = Date.now();
+  }
+}, { passive: true });
+
+document.addEventListener('touchend', (e) => {
+  if (isFullscreen) {
+    const touchEndY = e.changedTouches[0].clientY;
+    const touchEndTime = Date.now();
+    const deltaY = Math.abs(touchEndY - touchStartY);
+    const deltaTime = touchEndTime - touchStartTime;
+    
+    // Swipe up gesture to exit fullscreen (quick swipe up)
+    if (deltaY > 50 && deltaTime < 300 && touchEndY < touchStartY) {
+      exitFullscreen();
+    }
+  }
+}, { passive: true });
+
+// Double tap to toggle fullscreen on mobile
+let lastTap = 0;
+document.addEventListener('touchend', (e) => {
+  const currentTime = new Date().getTime();
+  const tapLength = currentTime - lastTap;
+  
+  if (tapLength < 500 && tapLength > 0) {
+    // Double tap detected
+    if (!isFullscreen) {
+      enterFullscreen();
+    } else {
+      exitFullscreen();
+    }
+  }
+  lastTap = currentTime;
+}, { passive: true });
+
 // Auto-load game when page loads
 document.addEventListener('DOMContentLoaded', function() {
   // Small delay to ensure everything is ready
@@ -257,7 +413,43 @@ document.addEventListener('DOMContentLoaded', function() {
       loadGame();
     }
   }, 500);
+  
+  // Initialize mobile UI
+  initializeMobileUI();
 });
+
+// Initialize mobile-specific UI elements
+function initializeMobileUI() {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const mobileInstructions = document.getElementById('mobile-instructions');
+  const fullscreenText = document.getElementById('fullscreen-text');
+  const exitFullscreenText = document.getElementById('exit-fullscreen-text');
+  
+  if (isMobile) {
+    // Show mobile instructions
+    if (mobileInstructions) {
+      mobileInstructions.style.display = 'block';
+    }
+    
+    // Update button text for mobile
+    if (fullscreenText) {
+      fullscreenText.textContent = '📱 FULLSCREEN';
+    }
+    if (exitFullscreenText) {
+      exitFullscreenText.textContent = '✕ EXIT';
+    }
+    
+    // Hide mobile instructions after 5 seconds
+    setTimeout(() => {
+      if (mobileInstructions) {
+        mobileInstructions.style.opacity = '0';
+        setTimeout(() => {
+          mobileInstructions.style.display = 'none';
+        }, 500);
+      }
+    }, 5000);
+  }
+}
 </script>
 
 <style>
@@ -294,6 +486,188 @@ document.addEventListener('DOMContentLoaded', function() {
 #game-container:-moz-full-screen #game-frame {
   height: 100vh !important;
   width: 100vw !important;
+}
+
+/* Mobile fullscreen fallback styles */
+.mobile-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999 !important;
+  background: var(--bg) !important;
+}
+
+.mobile-fullscreen #game-frame {
+  height: 100vh !important;
+  width: 100vw !important;
+  border: none !important;
+}
+
+/* Prevent body scroll when in fullscreen */
+.fullscreen-active {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Mobile-specific fullscreen button styles */
+@media (max-width: 768px) {
+  #fullscreen-controls {
+    position: absolute !important;
+    top: 15px !important;
+    right: 15px !important;
+    z-index: 1000 !important;
+    display: flex !important;
+    gap: 0 !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    border-radius: 25px !important;
+    padding: 4px !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+  
+  .fullscreen-btn, .exit-fullscreen-btn {
+    position: relative !important;
+    background: transparent !important;
+    color: white !important;
+    border: none !important;
+    padding: 12px 16px !important;
+    font-size: 12px !important;
+    border-radius: 20px !important;
+    min-width: 70px !important;
+    text-align: center !important;
+    box-shadow: none !important;
+    transition: all 0.2s ease !important;
+    font-weight: 500 !important;
+  }
+  
+  .fullscreen-btn span, .exit-fullscreen-btn span {
+    display: inline !important;
+    font-size: 12px !important;
+    color: inherit !important;
+  }
+  
+  .fullscreen-btn:hover, .exit-fullscreen-btn:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    transform: none !important;
+  }
+  
+  .fullscreen-btn:active, .exit-fullscreen-btn:active {
+    background: rgba(255, 255, 255, 0.2) !important;
+    transform: scale(0.95) !important;
+  }
+  
+  /* Active state for the visible button */
+  #fullscreen-controls .fullscreen-btn[style*="display: block"], 
+  #fullscreen-controls .exit-fullscreen-btn[style*="display: block"],
+  #fullscreen-controls .fullscreen-btn:not([style*="display: none"]), 
+  #fullscreen-controls .exit-fullscreen-btn:not([style*="display: none"]) {
+    background: rgba(0, 150, 255, 0.3) !important;
+    color: #00d4ff !important;
+  }
+  
+  /* When in fullscreen mode, position controls at top of screen */
+  .mobile-fullscreen #fullscreen-controls {
+    position: fixed !important;
+    top: 15px !important;
+    right: 15px !important;
+    z-index: 10000 !important;
+  }
+  
+  /* Hide button text on very small screens, show only icons */
+  @media (max-width: 480px) {
+    .fullscreen-btn span, .exit-fullscreen-btn span {
+      font-size: 0 !important;
+    }
+    
+    .fullscreen-btn::before {
+      content: "⛶" !important;
+      font-size: 16px !important;
+    }
+    
+    .exit-fullscreen-btn::before {
+      content: "✕" !important;
+      font-size: 16px !important;
+    }
+    
+    .fullscreen-btn, .exit-fullscreen-btn {
+      min-width: 50px !important;
+      padding: 12px !important;
+    }
+  }
+}
+
+/* Game container base styles */
+#game-container {
+  position: relative;
+  width: 100%;
+  min-height: 600px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+#game-frame {
+  width: 100%;
+  height: 600px;
+  border: none;
+  display: block;
+}
+
+/* Mobile viewport adjustments */
+@media (max-width: 768px) {
+  #game-container {
+    position: relative;
+    width: 100%;
+    min-height: 60vh;
+  }
+  
+  #game-frame {
+    width: 100% !important;
+    height: 60vh !important;
+    min-height: 300px;
+  }
+  
+  /* Landscape orientation on mobile */
+  @media (orientation: landscape) {
+    #game-frame {
+      height: 80vh !important;
+    }
+  }
+}
+
+/* Ensure proper sizing after fullscreen exit */
+#game-container:not(.mobile-fullscreen) {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 600px !important;
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  z-index: auto !important;
+  background: var(--bg) !important;
+}
+
+#game-container:not(.mobile-fullscreen) #game-frame {
+  width: 100% !important;
+  height: 600px !important;
+}
+
+/* Desktop fullscreen button styles */
+@media (min-width: 769px) {
+  .fullscreen-btn, .exit-fullscreen-btn {
+    background: rgba(0, 0, 0, 0.6) !important;
+    color: white !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .fullscreen-btn:hover, .exit-fullscreen-btn:hover {
+    background: rgba(0, 0, 0, 0.8) !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+  }
 }
 
 /* Fullscreen controls positioning */
