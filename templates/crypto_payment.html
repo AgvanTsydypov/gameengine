@@ -1,0 +1,481 @@
+{% extends "base.html" %}
+
+{% block title %}Crypto Payment - {{ package_name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .crypto-payment-container {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+
+  .crypto-payment-card {
+    background: #0f1117;
+    border: 2px solid #1a1d27;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 8px 25px rgba(0,0,0,.4);
+    text-align: center;
+  }
+
+  .crypto-payment-header {
+    margin-bottom: 2rem;
+  }
+
+  .crypto-payment-header h1 {
+    color: #e6e6ea;
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 0 10px rgba(30,228,255,.5);
+  }
+
+  .crypto-payment-header p {
+    color: #98a0ab;
+    font-size: 1.1rem;
+  }
+
+  .payment-details {
+    background: #1a1d27;
+    border: 2px solid #9d7bff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    box-shadow: 0 0 15px rgba(157,123,255,.2);
+  }
+
+  .payment-details h3 {
+    color: #e6e6ea;
+    margin-bottom: 1rem;
+    font-size: 1.3rem;
+  }
+
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #2a2d37;
+  }
+
+  .detail-row:last-child {
+    border-bottom: none;
+  }
+
+  .detail-label {
+    color: #98a0ab;
+    font-weight: 500;
+  }
+
+  .detail-value {
+    color: #e6e6ea;
+    font-weight: 600;
+  }
+
+  .crypto-amount {
+    color: #1ee4ff;
+    font-size: 1.2rem;
+    font-weight: 700;
+  }
+
+  .crypto-address {
+    background: #0f1117;
+    border: 1px solid #2a2d37;
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 1rem 0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    color: #e6e6ea;
+    word-break: break-all;
+    position: relative;
+  }
+
+  .copy-button {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: #9d7bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .copy-button:hover {
+    background: #1ee4ff;
+  }
+
+  .crypto-qr {
+    margin: 2rem 0;
+    text-align: center;
+  }
+
+  .crypto-qr img {
+    max-width: 200px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.3);
+  }
+
+  .payment-status {
+    background: #1a1d27;
+    border: 2px solid #2a2d37;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 2rem 0;
+  }
+
+  .status-pending {
+    border-color: #f59e0b;
+    color: #f59e0b;
+  }
+
+  .status-confirmed {
+    border-color: #10b981;
+    color: #10b981;
+  }
+
+  .status-failed {
+    border-color: #ef4444;
+    color: #ef4444;
+  }
+
+  .status-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .status-text {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .status-description {
+    color: #98a0ab;
+    font-size: 0.9rem;
+  }
+
+  .crypto-instructions {
+    background: #0f1117;
+    border: 2px solid #1ee4ff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    box-shadow: 0 0 15px rgba(30,228,255,.2);
+  }
+
+  .crypto-instructions h3 {
+    color: #1ee4ff;
+    margin-bottom: 1rem;
+  }
+
+  .crypto-instructions ol {
+    color: #e6e6ea;
+    text-align: left;
+    padding-left: 1.5rem;
+  }
+
+  .crypto-instructions li {
+    margin-bottom: 0.5rem;
+    line-height: 1.5;
+  }
+
+  .back-button {
+    background: #9d7bff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-block;
+    margin-top: 2rem;
+  }
+
+  .back-button:hover {
+    background: #1ee4ff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(30,228,255,.3);
+  }
+
+  .supported-crypto {
+    margin-top: 2rem;
+    padding: 1rem;
+    background: #1a1d27;
+    border-radius: 8px;
+    border: 1px solid #2a2d37;
+  }
+
+  .supported-crypto h4 {
+    color: #e6e6ea;
+    margin-bottom: 0.5rem;
+  }
+
+  .crypto-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+  }
+
+  .crypto-badge {
+    background: #0f1117;
+    border: 1px solid #2a2d37;
+    border-radius: 20px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+    color: #98a0ab;
+  }
+
+  .crypto-payment-link {
+    background: #1a1d27;
+    border: 2px solid #1ee4ff;
+    border-radius: 8px;
+    padding: 2rem;
+    margin: 2rem 0;
+    box-shadow: 0 0 15px rgba(30,228,255,.2);
+    text-align: center;
+  }
+
+  .crypto-payment-link h3 {
+    color: #1ee4ff;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+
+  .payment-link-button {
+    display: inline-block;
+    background: #1ee4ff;
+    color: #0f1117;
+    border: 2px solid #1ee4ff;
+    border-radius: 12px;
+    padding: 1rem 2rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(30,228,255,.3);
+    margin: 1rem 0;
+  }
+
+  .payment-link-button:hover {
+    background: #0f1117;
+    color: #1ee4ff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(30,228,255,.4);
+  }
+
+  .payment-info-box {
+    background: #0f1117;
+    border: 1px solid #2a2d37;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+    text-align: left;
+  }
+
+  .payment-info-box h4 {
+    color: #1ee4ff;
+    margin-bottom: 0.5rem;
+    text-align: center;
+  }
+
+  .payment-info-box ul {
+    color: #e6e6ea;
+    margin: 0;
+    padding-left: 1.5rem;
+  }
+
+  .payment-info-box li {
+    margin-bottom: 0.5rem;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 640px) {
+    .crypto-payment-card {
+      padding: 1rem;
+    }
+    
+    .detail-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+    }
+    
+    .crypto-address {
+      font-size: 0.8rem;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="crypto-payment-container">
+  <div class="crypto-payment-card">
+    <div class="crypto-payment-header">
+      <h1>₿ Crypto Payment</h1>
+      <p>Complete your payment using cryptocurrency</p>
+    </div>
+
+    <div class="payment-details">
+      <h3>Payment Details</h3>
+      <div class="detail-row">
+        <span class="detail-label">Package:</span>
+        <span class="detail-value">{{ package_name }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Credits:</span>
+        <span class="detail-value">{{ credits }} Credits</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Amount (USD):</span>
+        <span class="detail-value">${{ "%.2f"|format(amount) }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Crypto Amount:</span>
+        <span class="detail-value crypto-amount">{{ crypto_amount }} {{ crypto_currency }}</span>
+      </div>
+    </div>
+
+    {% if payment_status == 'pending' %}
+    <div class="payment-status status-pending">
+      <div class="status-icon">⏳</div>
+      <div class="status-text">Payment Pending</div>
+      <div class="status-description"></div>
+    </div>
+
+    {% if qr_code_url and qr_code_url != '' %}
+    <div class="crypto-payment-link">
+      <h3>💳 Complete Your Payment</h3>
+      <p style="color: #98a0ab; margin-bottom: 1.5rem;">Click the button below to open the secure payment page where you can choose your preferred cryptocurrency:</p>
+      
+      <a href="{{ qr_code_url }}" target="_blank" class="payment-link-button">
+        🚀 Open Payment Page
+      </a>
+    </div>
+    {% else %}
+    <div class="crypto-address">
+      <p style="color: #f59e0b; margin: 1rem 0;">Payment link is being generated. Please wait a moment and refresh the page.</p>
+    </div>
+    {% endif %}
+
+    <div class="crypto-instructions">
+      <h3>📋 Payment Instructions</h3>
+      <ol>
+        <li>Click the "Open Payment Page" button above</li>
+        <li>Choose your preferred cryptocurrency (Bitcoin, Ethereum, etc.)</li>
+        <li>Follow the instructions to send the exact amount to the provided address</li>
+        <li>Wait for blockchain confirmation (usually 10-30 minutes)</li>
+        <li>Your credits will be automatically added to your account</li>
+        <li>You can close this page - we'll email you when payment is confirmed</li>
+      </ol>
+    </div>
+
+    {% elif payment_status == 'confirmed' %}
+    <div class="payment-status status-confirmed">
+      <div class="status-icon">✅</div>
+      <div class="status-text">Payment Confirmed!</div>
+      <div class="status-description">Your credits have been added to your account.</div>
+    </div>
+
+    {% elif payment_status == 'failed' %}
+    <div class="payment-status status-failed">
+      <div class="status-icon">❌</div>
+      <div class="status-text">Payment Failed</div>
+      <div class="status-description">The payment could not be processed. Please try again.</div>
+    </div>
+    {% endif %}
+
+    <div class="supported-crypto">
+      <h4>Supported Cryptocurrencies</h4>
+      <div class="crypto-list">
+        <span class="crypto-badge">Bitcoin (BTC)</span>
+        <span class="crypto-badge">Ethereum (ETH)</span>
+        <span class="crypto-badge">Litecoin (LTC)</span>
+        <span class="crypto-badge">Bitcoin Cash (BCH)</span>
+        <span class="crypto-badge">USD Coin (USDC)</span>
+        <span class="crypto-badge">Tether (USDT)</span>
+        <span class="crypto-badge">Dai (DAI)</span>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap;">
+      <a href="/payment" class="back-button">← Back to Payment Options</a>
+      {% if payment_status == 'pending' %}
+      <button onclick="location.reload()" class="back-button" style="background: #1ee4ff; border: 2px solid #1ee4ff;">
+        🔄 Refresh Status Now
+      </button>
+      <button onclick="verifyPaymentManually()" class="back-button" style="background: #f59e0b; border: 2px solid #f59e0b;">
+        🔍 Verify Payment Now
+      </button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  function copyAddress() {
+    const address = document.getElementById('crypto-address').textContent;
+    navigator.clipboard.writeText(address).then(function() {
+      const button = document.querySelector('.copy-button');
+      const originalText = button.textContent;
+      button.textContent = 'Copied!';
+      button.style.background = '#10b981';
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.style.background = '#9d7bff';
+      }, 2000);
+    }).catch(function(err) {
+      console.error('Could not copy text: ', err);
+      alert('Could not copy address. Please copy manually.');
+    });
+  }
+
+  function verifyPaymentManually() {
+    const chargeId = '{{ charge_id }}';
+    const button = document.querySelector('button[onclick="verifyPaymentManually()"]');
+    
+    // Disable button and show loading
+    button.disabled = true;
+    button.textContent = '🔄 Verifying...';
+    
+    fetch(`/verify_payment/${chargeId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'success') {
+        alert(`✅ Success! ${data.message}`);
+        location.reload(); // Refresh to show updated status
+      } else if (data.status === 'already_processed') {
+        alert(`ℹ️ ${data.message}`);
+        location.reload();
+      } else if (data.status === 'not_completed') {
+        alert(`⏳ ${data.message}`);
+      } else {
+        alert(`❌ Error: ${data.error || data.message || 'Verification failed'}`);
+      }
+    })
+    .catch(error => {
+      console.error('Verification error:', error);
+      alert('❌ Network error during verification. Please try again.');
+    })
+    .finally(() => {
+      // Re-enable button
+      button.disabled = false;
+      button.textContent = '🔍 Verify Payment Now';
+    });
+  }
+
+</script>
+
+{% endblock %}

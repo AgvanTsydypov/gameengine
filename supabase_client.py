@@ -1305,6 +1305,167 @@ class SupabaseManager:
             logger.error(f"Error adding credits for user {user_id}: {e}")
             return False
 
+    # ============ PAYMENT TRACKING METHODS ============
+    
+    def create_payment_record(self, user_id: str, payment_type: str, payment_id: str, 
+                            amount: float, credits: int, package_name: str, 
+                            status: str = 'pending', metadata: Dict[str, Any] = None) -> Optional[str]:
+        """
+        Creates a payment record in the database
+        
+        Args:
+            user_id: User ID who made the payment
+            payment_type: Type of payment ('stripe', 'coinbase')
+            payment_id: External payment ID (charge_id, intent_id, etc.)
+            amount: Payment amount in USD
+            credits: Number of credits purchased
+            package_name: Name of the credit package
+            status: Payment status ('pending', 'completed', 'failed', 'expired')
+            metadata: Additional payment data
+            
+        Returns:
+            Payment record ID if successful, None otherwise
+        """
+        if not self.is_connected():
+            return None
+        
+        try:
+            payment_data = {
+                'user_id': user_id,
+                'payment_type': payment_type,
+                'payment_id': payment_id,
+                'amount': amount,
+                'credits': credits,
+                'package_name': package_name,
+                'status': status,
+                'metadata': metadata or {},
+                'created_at': 'now()',
+                'updated_at': 'now()'
+            }
+            
+            # Use service role key for database operations
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('payments').insert(payment_data).execute()
+            else:
+                response = self.client.table('payments').insert(payment_data).execute()
+            
+            if response.data:
+                payment_record_id = response.data[0]['id']
+                logger.info(f"Created payment record {payment_record_id} for user {user_id}")
+                return payment_record_id
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error creating payment record for user {user_id}: {e}")
+            return None
+    
+    def update_payment_status(self, payment_id: str, status: str, metadata: Dict[str, Any] = None) -> bool:
+        """
+        Updates payment status by external payment ID
+        
+        Args:
+            payment_id: External payment ID (charge_id, intent_id, etc.)
+            status: New payment status
+            metadata: Additional metadata to update
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_connected():
+            return False
+        
+        try:
+            update_data = {
+                'status': status,
+                'updated_at': 'now()'
+            }
+            
+            if metadata:
+                # Merge with existing metadata
+                update_data['metadata'] = metadata
+            
+            # Use service role key for database operations
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('payments').update(update_data).eq('payment_id', payment_id).execute()
+            else:
+                response = self.client.table('payments').update(update_data).eq('payment_id', payment_id).execute()
+            
+            if response.data:
+                logger.info(f"Updated payment {payment_id} status to {status}")
+                return True
+            
+            logger.warning(f"No payment found with ID {payment_id}")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error updating payment status for {payment_id}: {e}")
+            return False
+    
+    def get_payment_by_id(self, payment_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Gets payment record by external payment ID
+        
+        Args:
+            payment_id: External payment ID
+            
+        Returns:
+            Payment record dictionary or None
+        """
+        if not self.is_connected():
+            return None
+        
+        try:
+            # Use service role key for database operations
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('payments').select('*').eq('payment_id', payment_id).execute()
+            else:
+                response = self.client.table('payments').select('*').eq('payment_id', payment_id).execute()
+            
+            if response.data:
+                return response.data[0]
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting payment record for {payment_id}: {e}")
+            return None
+    
+    def get_user_payments(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Gets payment history for a user
+        
+        Args:
+            user_id: User ID
+            limit: Maximum number of payments to return
+            
+        Returns:
+            List of payment records
+        """
+        if not self.is_connected():
+            return []
+        
+        try:
+            # Use service role key for database operations
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                response = service_client.table('payments').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(limit).execute()
+            else:
+                response = self.client.table('payments').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(limit).execute()
+            
+            return response.data or []
+            
+        except Exception as e:
+            logger.error(f"Error getting payment history for user {user_id}: {e}")
+            return []
+
     def search_games_with_stats(self, search_query: str, limit: int = None, order_by: str = 'created_at') -> List[Dict[str, Any]]:
         """
         Search games with statistics by title only

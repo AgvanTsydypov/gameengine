@@ -76,3 +76,6 @@ Pillow==10.1.0
 
 # For better Chrome/ChromeDriver management on Render
 undetected-chromedriver==3.5.4
+
+# For Coinbase Commerce integration
+coinbase-commerce==1.0.1

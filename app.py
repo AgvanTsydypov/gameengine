@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from config import config
 from supabase_client import supabase_manager
 from stripe_client import stripe_manager
+from coinbase_client import coinbase_manager
 from html_preview_generator import HTMLPreviewGenerator
 import openai
 import stripe
@@ -1547,9 +1548,19 @@ def payment():
         logger.info("User accessing payment page without session - showing packages anyway")
         # Продолжаем выполнение вместо redirect на login
     
-    if not stripe_manager.is_configured():
-        flash('Stripe not configured. Payment feature will be available after setup', 'warning')
-        return redirect(url_for('index'))  # Redirect to index instead of my_games
+    # Check if at least one payment method is configured
+    stripe_configured = stripe_manager.is_configured()
+    crypto_configured = coinbase_manager.is_configured()
+    
+    if not stripe_configured and not crypto_configured:
+        flash('No payment methods configured. Payment feature will be available after setup', 'warning')
+        return redirect(url_for('index'))
+    
+    if not stripe_configured:
+        flash('Credit card payments are not available. Only cryptocurrency payments are available.', 'info')
+    
+    if not crypto_configured:
+        flash('Cryptocurrency payments are not available. Only credit card payments are available.', 'info')
     
     # Get user's current credits (only if logged in)
     user_credits = 0
@@ -1621,7 +1632,9 @@ def payment():
                          authenticated=authenticated, 
                          user_credits=user_credits,
                          credit_packages=credit_packages,
-                         stripe_publishable_key=stripe_manager.publishable_key)
+                         stripe_publishable_key=stripe_manager.publishable_key,
+                         stripe_configured=stripe_configured,
+                         crypto_configured=crypto_configured)
 
 @app.route('/create_payment_intent', methods=['POST'])
 def create_payment_intent():
@@ -1655,6 +1668,36 @@ def create_payment_intent():
             )
             
             if intent:
+                # Create payment record in database
+                user_id = session.get('user_id')
+                package_name = request.json.get('package_name', 'Stripe Payment')
+                credits = request.json.get('credits', 0)
+                
+                if user_id and credits > 0:
+                    try:
+                        payment_record_id = supabase_manager.create_payment_record(
+                            user_id=user_id,
+                            payment_type='stripe',
+                            payment_id=intent.id,
+                            amount=amount / 100.0,  # Convert cents to dollars
+                            credits=credits,
+                            package_name=package_name,
+                            status='pending',
+                            metadata={
+                                'user_email': session.get('user_email'),
+                                'stripe_payment_intent_id': intent.id,
+                                'stripe_customer_id': customer.id
+                            }
+                        )
+                        
+                        if payment_record_id:
+                            logger.info(f"Created payment record {payment_record_id} for Stripe payment {intent.id}")
+                        else:
+                            logger.warning(f"Failed to create payment record for Stripe payment {intent.id}")
+                            
+                    except Exception as e:
+                        logger.error(f"Error creating payment record for Stripe payment {intent.id}: {e}")
+                
                 return jsonify({
                     'success': True,
                     'client_secret': intent.client_secret,
@@ -1760,11 +1803,83 @@ def stripe_webhook():
                         user = supabase_manager.get_user_by_email(customer_email)
                         if user:
                             user_id = user['id']
+                            
+                            # Create payment record if it doesn't exist (for Payment Links)
+                            payment_intent_id = session.payment_intent
+                            payment_record = None
+                            
+                            if payment_intent_id:
+                                # Try to find existing payment record
+                                payment_record = supabase_manager.get_payment_by_id(payment_intent_id)
+                                
+                                # If no record exists, create one (this happens with Payment Links)
+                                if not payment_record:
+                                    try:
+                                        payment_record_id = supabase_manager.create_payment_record(
+                                            user_id=user_id,
+                                            payment_type='stripe',
+                                            payment_id=payment_intent_id,
+                                            amount=session.amount_total / 100.0,  # Convert cents to dollars
+                                            credits=credits,
+                                            package_name=product_name,
+                                            status='pending',
+                                            metadata={
+                                                'user_email': customer_email,
+                                                'stripe_payment_intent_id': payment_intent_id,
+                                                'stripe_session_id': session.id,
+                                                'created_via_webhook': True
+                                            }
+                                        )
+                                        
+                                        if payment_record_id:
+                                            logger.info(f"Created missing payment record {payment_record_id} for Stripe Payment Link {payment_intent_id}")
+                                        else:
+                                            logger.warning(f"Failed to create payment record for Stripe Payment Link {payment_intent_id}")
+                                            
+                                    except Exception as e:
+                                        logger.error(f"Error creating payment record for Stripe Payment Link {payment_intent_id}: {e}")
+                            
                             # Add credits to user account
                             success = supabase_manager.add_credits(user_id, credits)
+                            
                             if success:
+                                # Update payment status in database
+                                if payment_intent_id:
+                                    try:
+                                        supabase_manager.update_payment_status(
+                                            payment_id=payment_intent_id,
+                                            status='completed',
+                                            metadata={
+                                                'completed_at': 'now()',
+                                                'webhook_processed': True,
+                                                'credits_added': credits,
+                                                'stripe_session_id': session.id,
+                                                'customer_email': customer_email
+                                            }
+                                        )
+                                        logger.info(f"Updated Stripe payment record status to completed for {payment_intent_id}")
+                                    except Exception as e:
+                                        logger.error(f"Error updating Stripe payment record: {e}")
+                                
                                 logger.info(f"Added {credits} credits to user {user_id} ({customer_email}) after successful payment")
                             else:
+                                # Update payment status as failed
+                                if payment_intent_id:
+                                    try:
+                                        supabase_manager.update_payment_status(
+                                            payment_id=payment_intent_id,
+                                            status='failed',
+                                            metadata={
+                                                'failed_at': 'now()',
+                                                'failure_reason': 'Failed to add credits to user account',
+                                                'webhook_processed': True,
+                                                'stripe_session_id': session.id
+                                            }
+                                        )
+                                        logger.info(f"Updated Stripe payment record status to failed for {payment_intent_id}")
+                                    except Exception as e:
+                                        logger.error(f"Error updating failed Stripe payment record: {e}")
+                                
                                 logger.error(f"Failed to add credits to user {user_id}")
                         else:
                             logger.error(f"User not found for email: {customer_email}")
@@ -1877,6 +1992,646 @@ def payment_success():
     # Always redirect to payment page with success flag
     logger.info("Redirecting to payment page with success flag")
     return redirect('/payment?success=true')
+
+# Coinbase Commerce Crypto Payment Routes
+@app.route('/create_crypto_payment', methods=['POST'])
+def create_crypto_payment():
+    """Creates a crypto payment via Coinbase Commerce"""
+    try:
+        data = request.get_json()
+        package_name = data.get('package_name')
+        credits = data.get('credits')
+        amount = data.get('amount')
+        
+        if not all([package_name, credits, amount]):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        if not coinbase_manager.is_configured():
+            return jsonify({'error': 'Coinbase Commerce not configured'}), 400
+        
+        # Create metadata for tracking
+        metadata = {
+            'package_name': package_name,
+            'credits': credits,
+            'amount': amount,
+            'user_id': session.get('user_id', 'anonymous'),
+            'user_email': session.get('user_email', 'unknown')
+        }
+        
+        # Create charge
+        charge = coinbase_manager.create_charge(
+            name=f"{package_name} - {credits} Credits",
+            description=f"Purchase of {credits} credits for AI game generation",
+            amount=coinbase_manager.format_amount(amount),
+            currency='USD',
+            metadata=metadata
+        )
+        
+        if not charge:
+            return jsonify({'error': 'Failed to create crypto payment'}), 500
+        
+        # Store payment info in session for tracking
+        session['crypto_payment_id'] = charge.id
+        session['crypto_package_name'] = package_name
+        session['crypto_credits'] = credits
+        session['crypto_amount'] = amount
+
+        # Create payment record in database
+        user_id = session.get('user_id')
+        if user_id:
+            try:
+                payment_record_id = supabase_manager.create_payment_record(
+                    user_id=user_id,
+                    payment_type='coinbase',
+                    payment_id=charge.id,
+                    amount=amount,
+                    credits=credits,
+                    package_name=package_name,
+                    status='pending',
+                    metadata={
+                        'user_email': session.get('user_email'),
+                        'coinbase_charge_id': charge.id,
+                        'charge_metadata': metadata
+                    }
+                )
+                
+                if payment_record_id:
+                    logger.info(f"Created payment record {payment_record_id} for crypto payment {charge.id}")
+                else:
+                    logger.warning(f"Failed to create payment record for crypto payment {charge.id}")
+                    
+            except Exception as e:
+                logger.error(f"Error creating payment record for crypto payment {charge.id}: {e}")
+        
+        logger.info(f"Crypto payment created: {charge.id} for {package_name}")
+        
+        return jsonify({
+            'success': True,
+            'payment_url': f'/crypto_payment/{charge.id}',
+            'charge_id': charge.id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error creating crypto payment: {e}")
+        return jsonify({'error': 'Error creating crypto payment'}), 500
+
+@app.route('/crypto_payment/<charge_id>')
+def crypto_payment_page(charge_id):
+    """Display crypto payment page with payment details"""
+    try:
+        if not coinbase_manager.is_configured():
+            flash('Crypto payments are not available at this time.', 'error')
+            return redirect('/payment')
+        
+        # Get charge details from Coinbase Commerce
+        charge = coinbase_manager.get_charge(charge_id)
+        if not charge:
+            flash('Payment not found.', 'error')
+            return redirect('/payment')
+        
+        # Log charge creation for debugging
+        logger.info(f"Crypto payment page loaded for charge: {charge_id}")
+        
+        # Extract payment details
+        metadata = getattr(charge, 'metadata', {})
+        package_name = metadata.get('package_name', 'Unknown Package')
+        credits = metadata.get('credits', 0)
+        amount = metadata.get('amount', 0)
+        
+        # Get crypto payment details - Coinbase Commerce returns data as attributes, not dict
+        crypto_amount = getattr(charge, 'pricing', {}).get('local', {}).get('amount', '0')
+        crypto_currency = getattr(charge, 'pricing', {}).get('local', {}).get('currency', 'USD')
+        
+        # Get the first available crypto address
+        addresses = getattr(charge, 'addresses', {})
+        crypto_address = ''
+        for currency in ['bitcoin', 'ethereum', 'litecoin', 'bitcoin_cash']:
+            if currency in addresses and addresses[currency]:
+                crypto_address = addresses[currency]
+                break
+        
+        # Generate QR code URL (Coinbase provides this)
+        qr_code_url = getattr(charge, 'hosted_url', None)
+        
+        # Check payment status from database first, then fallback to Coinbase
+        payment_status = 'pending'
+        payment_record = supabase_manager.get_payment_by_id(charge_id)
+        
+        if payment_record:
+            # Use status from database if available
+            db_status = payment_record.get('status', 'pending')
+            if db_status == 'completed':
+                payment_status = 'confirmed'
+            elif db_status in ['failed', 'expired', 'cancelled']:
+                payment_status = 'failed'
+            else:
+                payment_status = 'pending'
+            
+            logger.info(f"Using database payment status for {charge_id}: {db_status}")
+        else:
+            # Fallback to real-time Coinbase status
+            status = getattr(charge, 'status', 'PENDING')
+            if status == 'COMPLETED':
+                payment_status = 'confirmed'
+            elif status == 'EXPIRED' or status == 'CANCELED':
+                payment_status = 'failed'
+            
+            logger.info(f"Using Coinbase real-time status for {charge_id}: {status}")
+            
+            # Update database with current status if we have a user
+            user_id = session.get('user_id')
+            if user_id and not payment_record:
+                # Create payment record if it doesn't exist
+                try:
+                    supabase_manager.create_payment_record(
+                        user_id=user_id,
+                        payment_type='coinbase',
+                        payment_id=charge_id,
+                        amount=float(amount),
+                        credits=credits,
+                        package_name=package_name,
+                        status='pending' if payment_status == 'pending' else payment_status,
+                        metadata={
+                            'user_email': session.get('user_email'),
+                            'coinbase_charge_id': charge_id,
+                            'charge_status': status
+                        }
+                    )
+                    logger.info(f"Created missing payment record for {charge_id}")
+                except Exception as e:
+                    logger.error(f"Error creating missing payment record for {charge_id}: {e}")
+        
+        return render_template('crypto_payment.html',
+                             package_name=package_name,
+                             credits=credits,
+                             amount=float(amount),
+                             crypto_amount=crypto_amount,
+                             crypto_currency=crypto_currency,
+                             crypto_address=crypto_address,
+                             qr_code_url=qr_code_url,
+                             payment_status=payment_status,
+                             charge_id=charge_id)
+        
+    except Exception as e:
+        logger.error(f"Error displaying crypto payment page: {e}")
+        flash('Error loading payment details.', 'error')
+        return redirect('/payment')
+
+@app.route('/coinbase_webhook', methods=['POST'])
+def coinbase_webhook():
+    """Handle Coinbase Commerce webhook events"""
+    try:
+        payload = request.get_data(as_text=True)
+        signature = request.headers.get('CB-Signature')
+        
+        logger.info("=== COINBASE WEBHOOK RECEIVED ===")
+        logger.info(f"Headers: {dict(request.headers)}")
+        logger.info(f"Payload: {payload}")
+        logger.info(f"Signature: {signature}")
+        
+        # Verify webhook signature (skip in development if secret not configured)
+        flask_env = os.getenv('FLASK_ENV', 'development')
+        webhook_secret_configured = bool(coinbase_manager.webhook_secret)
+        
+        if webhook_secret_configured:
+            if not coinbase_manager.verify_webhook_signature(payload, signature):
+                logger.error("Coinbase webhook signature verification failed")
+                logger.error(f"Received signature: {signature}")
+                logger.error("This could be caused by:")
+                logger.error("1. Incorrect COINBASE_COMMERCE_WEBHOOK_SECRET environment variable")
+                logger.error("2. Webhook not configured in Coinbase Commerce dashboard")
+                logger.error("3. Using wrong webhook URL")
+                return jsonify({'error': 'Invalid signature'}), 400
+            else:
+                logger.info("✅ Webhook signature verified successfully")
+        else:
+            if flask_env == 'development':
+                logger.warning("⚠️  DEVELOPMENT MODE: Webhook signature verification SKIPPED")
+                logger.warning("⚠️  Set COINBASE_COMMERCE_WEBHOOK_SECRET for production!")
+            else:
+                logger.error("❌ PRODUCTION: Webhook secret not configured - rejecting webhook")
+                logger.error("Set COINBASE_COMMERCE_WEBHOOK_SECRET environment variable")
+                return jsonify({'error': 'Webhook secret not configured'}), 400
+        
+        # Parse webhook data
+        webhook_data = json.loads(payload)
+        event_type = webhook_data.get('type')
+        
+        logger.info(f"Processing Coinbase webhook event: {event_type}")
+        
+        if event_type == 'charge:confirmed':
+            logger.info("=== PROCESSING CHARGE:CONFIRMED ===")
+            # Payment confirmed - add credits to user account
+            charge_data = webhook_data.get('data', {})
+            charge_id = charge_data.get('id')
+            
+            logger.info(f"Charge ID: {charge_id}")
+            logger.info(f"Charge data: {charge_data}")
+            
+            if not charge_id:
+                logger.error("No charge ID in webhook data")
+                return jsonify({'error': 'No charge ID'}), 400
+            
+            # Get charge details
+            charge = coinbase_manager.get_charge(charge_id)
+            if not charge:
+                logger.error(f"Could not retrieve charge {charge_id}")
+                return jsonify({'error': 'Charge not found'}), 400
+            
+            logger.info(f"Retrieved charge: {charge}")
+            
+            # Extract user info from metadata - handle both dict and object format
+            if hasattr(charge, 'metadata') and charge.metadata:
+                metadata = charge.metadata if isinstance(charge.metadata, dict) else charge.metadata.__dict__
+            elif hasattr(charge, '__dict__') and 'metadata' in charge.__dict__:
+                metadata = charge.__dict__['metadata']
+            else:
+                metadata = {}
+            
+            logger.info(f"Charge metadata type: {type(charge.metadata if hasattr(charge, 'metadata') else 'N/A')}")
+            logger.info(f"Extracted metadata: {metadata}")
+            
+            user_email = metadata.get('user_email')
+            credits = metadata.get('credits')
+            package_name = metadata.get('package_name')
+            
+            logger.info(f"Metadata: {metadata}")
+            logger.info(f"User email: {user_email}")
+            logger.info(f"Credits: {credits}")
+            logger.info(f"Package name: {package_name}")
+            
+            if not user_email or not credits:
+                logger.error(f"Missing user info in charge metadata: {metadata}")
+                return jsonify({'error': 'Missing user info'}), 400
+            
+            # Check if Supabase is connected
+            if not supabase_manager.is_connected():
+                logger.error("❌ CRITICAL: Supabase not connected - cannot add credits")
+                logger.error("Check SUPABASE_URL and SUPABASE_KEY environment variables")
+                return jsonify({'error': 'Database connection failed'}), 500
+            
+            # Find user by email
+            user = supabase_manager.get_user_by_email(user_email)
+            if not user:
+                logger.error(f"❌ CRITICAL: User not found for email: {user_email}")
+                logger.error("This could be caused by:")
+                logger.error("1. User was deleted from the system")
+                logger.error("2. Different email in payment vs registration") 
+                logger.error("3. Supabase connection issues")
+                logger.error("4. Wrong environment (dev vs prod) Supabase database")
+                logger.error(f"Charge ID: {charge_id}")
+                return jsonify({'error': 'User not found'}), 400
+            
+            logger.info(f"Found user: {user}")
+            user_id = user['id']
+            
+            # Check if this payment was already processed (duplicate webhook protection)
+            payment_record = supabase_manager.get_payment_by_id(charge_id)
+            if payment_record and payment_record.get('status') == 'completed':
+                logger.info(f"⚠️ Payment {charge_id} already processed - skipping duplicate webhook")
+                return jsonify({'status': 'already_processed', 'message': 'Payment already completed'})
+            
+            # Add credits to user account
+            logger.info(f"Adding {credits} credits to user {user_id}")
+            logger.info(f"Current user credits before addition: {supabase_manager.get_user_credits(user_id)}")
+            
+            try:
+                success = supabase_manager.add_credits(user_id, int(credits))
+                logger.info(f"Add credits result: {success}")
+                if success:
+                    logger.info(f"Current user credits after addition: {supabase_manager.get_user_credits(user_id)}")
+                else:
+                    logger.error(f"add_credits returned False for user {user_id}")
+            except Exception as e:
+                logger.error(f"Exception during add_credits: {e}")
+                import traceback
+                logger.error(f"Full traceback: {traceback.format_exc()}")
+                success = False
+            
+            if success:
+                # Update payment status in database
+                try:
+                    logger.info(f"Attempting to update payment status for charge_id: {charge_id}")
+                    
+                    # First check if payment record exists
+                    payment_record = supabase_manager.get_payment_by_id(charge_id)
+                    logger.info(f"Payment record found: {payment_record}")
+                    
+                    update_result = supabase_manager.update_payment_status(
+                        payment_id=charge_id,
+                        status='completed',
+                        metadata={
+                            'completed_at': 'now()',
+                            'webhook_processed': True,
+                            'credits_added': credits,
+                            'user_id': user_id,
+                            'webhook_timestamp': datetime.now().isoformat()
+                        }
+                    )
+                    logger.info(f"Payment status update result: {update_result}")
+                    
+                    if update_result:
+                        logger.info(f"✅ Successfully updated payment record status to completed for {charge_id}")
+                    else:
+                        logger.warning(f"⚠️ Payment status update returned False for {charge_id}")
+                        
+                except Exception as e:
+                    logger.error(f"❌ Error updating payment record for {charge_id}: {e}")
+                    import traceback
+                    logger.error(f"Full traceback: {traceback.format_exc()}")
+                
+                logger.info(f"✅ SUCCESS: Added {credits} credits to user {user_id} ({user_email}) after crypto payment confirmation")
+                logger.info(f"=== CRYPTO PAYMENT COMPLETE ===")
+                logger.info(f"Charge ID: {charge_id}")
+                logger.info(f"User: {user_email} (ID: {user_id})")
+                logger.info(f"Package: {package_name}")
+                logger.info(f"Credits Added: {credits}")
+                logger.info(f"===========================")
+                
+                # Send confirmation email (optional)
+                try:
+                    # You can add email notification here if needed
+                    logger.info(f"Crypto payment confirmed for {package_name} - {credits} credits")
+                except Exception as e:
+                    logger.error(f"Error sending crypto payment confirmation email: {e}")
+            else:
+                # Update payment status as failed in database
+                try:
+                    supabase_manager.update_payment_status(
+                        payment_id=charge_id,
+                        status='failed',
+                        metadata={
+                            'failed_at': 'now()',
+                            'failure_reason': 'Failed to add credits to user account',
+                            'webhook_processed': True,
+                            'user_id': user_id
+                        }
+                    )
+                    logger.info(f"Updated payment record status to failed for {charge_id}")
+                except Exception as e:
+                    logger.error(f"Error updating payment record to failed for {charge_id}: {e}")
+                
+                logger.error(f"❌ FAILED: Could not add credits to user {user_id} after crypto payment")
+                logger.error(f"=== CRYPTO PAYMENT FAILED ===")
+                logger.error(f"Charge ID: {charge_id}")
+                logger.error(f"User: {user_email} (ID: {user_id})")
+                logger.error(f"Package: {package_name}")
+                logger.error(f"Credits: {credits}")
+                logger.error(f"Reason: add_credits() returned False")
+                logger.error(f"===========================")
+                return jsonify({'error': 'Failed to add credits'}), 500
+        
+        elif event_type == 'charge:pending':
+            # Payment pending (detected in blockchain)
+            charge_data = webhook_data.get('data', {})
+            charge_id = charge_data.get('id')
+            logger.info(f"Crypto payment pending: {charge_id}")
+            
+            # Update payment status in database
+            try:
+                supabase_manager.update_payment_status(
+                    payment_id=charge_id,
+                    status='pending',
+                    metadata={
+                        'pending_at': 'now()',
+                        'blockchain_detected': True,
+                        'webhook_processed': True
+                    }
+                )
+                logger.info(f"Updated payment record status to pending for {charge_id}")
+            except Exception as e:
+                logger.error(f"Error updating payment record to pending for {charge_id}: {e}")
+            
+        elif event_type == 'charge:failed':
+            # Payment failed
+            charge_data = webhook_data.get('data', {})
+            charge_id = charge_data.get('id')
+            logger.info(f"Crypto payment failed: {charge_id}")
+            
+            # Update payment status in database
+            try:
+                supabase_manager.update_payment_status(
+                    payment_id=charge_id,
+                    status='failed',
+                    metadata={
+                        'failed_at': 'now()',
+                        'failure_reason': 'Payment failed per Coinbase webhook',
+                        'webhook_processed': True
+                    }
+                )
+                logger.info(f"Updated payment record status to failed for {charge_id}")
+            except Exception as e:
+                logger.error(f"Error updating payment record to failed for {charge_id}: {e}")
+            
+        elif event_type == 'charge:created':
+            # Payment created
+            charge_data = webhook_data.get('data', {})
+            charge_id = charge_data.get('id')
+            logger.info(f"Crypto payment created: {charge_id}")
+            
+            # No need to update database here as it should already be created when user initiates payment
+        
+        return jsonify({'status': 'success'})
+        
+    except Exception as e:
+        logger.error(f"Error processing Coinbase webhook: {e}")
+        return jsonify({'error': 'Webhook processing failed'}), 500
+
+@app.route('/test_coinbase_webhook', methods=['GET', 'POST'])
+def test_coinbase_webhook():
+    """Test endpoint to check if webhook is working"""
+    if request.method == 'GET':
+        return jsonify({
+            'status': 'Webhook endpoint is accessible',
+            'method': 'GET',
+            'timestamp': datetime.now().isoformat()
+        })
+    
+    # Handle POST request (simulate webhook)
+    try:
+        payload = request.get_data(as_text=True)
+        headers = dict(request.headers)
+        
+        logger.info("=== TEST WEBHOOK RECEIVED ===")
+        logger.info(f"Headers: {headers}")
+        logger.info(f"Payload: {payload}")
+        
+        return jsonify({
+            'status': 'Test webhook received successfully',
+            'headers': headers,
+            'payload': payload,
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Test webhook error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/verify_payment/<charge_id>', methods=['POST'])
+def verify_payment_manually(charge_id):
+    """Manual payment verification for debugging"""
+    try:
+        # Check if user is logged in
+        if 'user_id' not in session:
+            return jsonify({'error': 'Not authenticated'}), 401
+        
+        user_id = session['user_id']
+        user_email = session.get('user_email')
+        
+        logger.info(f"=== MANUAL PAYMENT VERIFICATION ===")
+        logger.info(f"Charge ID: {charge_id}")
+        logger.info(f"User ID: {user_id}")
+        logger.info(f"User Email: {user_email}")
+        
+        # Check if Coinbase is configured
+        if not coinbase_manager.is_configured():
+            return jsonify({'error': 'Coinbase Commerce not configured'}), 400
+        
+        # Get charge details from Coinbase
+        charge = coinbase_manager.get_charge(charge_id)
+        if not charge:
+            return jsonify({'error': 'Charge not found in Coinbase'}), 400
+        
+        logger.info(f"Charge status: {getattr(charge, 'timeline', 'No timeline')}")
+        logger.info(f"Charge addresses: {getattr(charge, 'addresses', 'No addresses')}")
+        
+        # Check charge status
+        timeline = getattr(charge, 'timeline', [])
+        confirmed = False
+        for event in timeline:
+            if hasattr(event, 'status') and event.status == 'CONFIRMED':
+                confirmed = True
+                break
+        
+        if not confirmed:
+            return jsonify({
+                'error': 'Payment not confirmed yet',
+                'charge_status': getattr(charge, 'timeline', []),
+                'suggestion': 'Please wait for payment confirmation on the blockchain'
+            }), 400
+        
+        # Extract payment metadata
+        if hasattr(charge, 'metadata') and charge.metadata:
+            metadata = charge.metadata if isinstance(charge.metadata, dict) else charge.metadata.__dict__
+        else:
+            metadata = {}
+        
+        credits = metadata.get('credits')
+        package_name = metadata.get('package_name')
+        
+        if not credits:
+            return jsonify({'error': 'No credits info found in payment metadata'}), 400
+        
+        # Log charge status
+        coinbase_status = getattr(charge, 'status', 'UNKNOWN')
+        logger.info(f"Coinbase charge status: {coinbase_status}")
+        
+        # Check database record
+        payment_record = supabase_manager.get_payment_by_id(charge_id)
+        if payment_record:
+            db_status = payment_record.get('status', 'unknown')
+            logger.info(f"Database payment status: {db_status}")
+        else:
+            logger.warning(f"No payment record found in database for {charge_id}")
+        
+        # If payment is completed in Coinbase but not processed
+        if coinbase_status == 'COMPLETED':
+            # Extract metadata
+            metadata = getattr(charge, 'metadata', {})
+            package_name = metadata.get('package_name', 'Unknown')
+            credits = metadata.get('credits', 0)
+            
+            logger.info(f"Payment appears completed - attempting to process credits")
+            
+            # Check if credits were already added by checking if payment record shows completed
+            if payment_record and payment_record.get('status') == 'completed':
+                logger.info(f"Payment already processed successfully")
+                return jsonify({
+                    'status': 'already_processed',
+                    'message': 'Payment was already processed successfully',
+                    'charge_id': charge_id,
+                    'coinbase_status': coinbase_status,
+                    'database_status': payment_record.get('status')
+                })
+            
+            # Add credits to user
+            logger.info(f"Adding {credits} credits to user {user_id}")
+            success = supabase_manager.add_credits(user_id, int(credits))
+            
+            if success:
+                # Update payment status in database
+                supabase_manager.update_payment_status(
+                    payment_id=charge_id,
+                    status='completed',
+                    metadata={
+                        'manually_verified': True,
+                        'verified_by': user_id,
+                        'verified_at': 'now()',
+                        'credits_added': credits
+                    }
+                )
+                
+                logger.info(f"✅ MANUAL VERIFICATION SUCCESS: Added {credits} credits to user {user_id}")
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': f'Payment verified and {credits} credits added to your account',
+                    'charge_id': charge_id,
+                    'credits_added': credits,
+                    'coinbase_status': coinbase_status
+                })
+            else:
+                logger.error(f"❌ MANUAL VERIFICATION FAILED: Could not add credits to user {user_id}")
+                return jsonify({'error': 'Failed to add credits'}), 500
+        
+        # Payment not completed yet
+        return jsonify({
+            'status': 'not_completed',
+            'message': f'Payment is not yet completed. Status: {coinbase_status}',
+            'charge_id': charge_id,
+            'coinbase_status': coinbase_status,
+            'database_status': payment_record.get('status') if payment_record else 'not_found'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in manual payment verification: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return jsonify({'error': 'Verification failed'}), 500
+
+@app.route('/check_payment_status/<charge_id>', methods=['GET'])
+def check_payment_status(charge_id):
+    """Check payment status for debugging"""
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Not authenticated'}), 401
+        
+        user_id = session['user_id']
+        
+        # Check database record
+        payment_record = supabase_manager.get_payment_by_id(charge_id)
+        
+        # Check Coinbase status if configured
+        coinbase_status = 'N/A'
+        if coinbase_manager.is_configured():
+            charge = coinbase_manager.get_charge(charge_id)
+            if charge:
+                coinbase_status = getattr(charge, 'status', 'UNKNOWN')
+        
+        # Get current user credits
+        current_credits = supabase_manager.get_user_credits(user_id)
+        
+        return jsonify({
+            'charge_id': charge_id,
+            'database_status': payment_record.get('status') if payment_record else 'not_found',
+            'database_record': payment_record,
+            'coinbase_status': coinbase_status,
+            'current_user_credits': current_credits,
+            'payment_found_in_db': bool(payment_record)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error checking payment status: {e}")
+        return jsonify({'error': 'Status check failed'}), 500
 
 # ============ LIKES SYSTEM ROUTES ============
 

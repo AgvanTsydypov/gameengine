@@ -129,6 +129,56 @@
   .selection-info h3{color:#e6e6ea;margin:0 0 .5rem 0;text-align:center;}
   .selection-info p{color:#98a0ab;margin:0;text-align:center;}
   .selection-info.show{display:block;}
+
+  /* ==== PAYMENT METHOD SELECTOR ==== */
+  .payment-method-selector{
+    display:grid;
+    gap:16px;
+    grid-template-columns:1fr 1fr;
+    margin-top:1rem;
+  }
+  @media (max-width:640px){ .payment-method-selector{ grid-template-columns:1fr; } }
+
+  .payment-method-option{
+    cursor:pointer;
+    display:block;
+  }
+  .payment-method-option input[type="radio"]{
+    display:none;
+  }
+  .payment-method-card{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:1.5rem;
+    border:2px solid #1a1d27;
+    border-radius:8px;
+    background:#0f1117;
+    transition:all .2s ease;
+    text-align:center;
+  }
+  .payment-method-option input[type="radio"]:checked + .payment-method-card{
+    border-color:#1ee4ff;
+    box-shadow:0 0 15px rgba(30,228,255,.2);
+    background:#1a1d27;
+  }
+  .payment-method-option:hover .payment-method-card{
+    border-color:#9d7bff;
+    box-shadow:0 0 10px rgba(157,123,255,.1);
+  }
+  .payment-icon{
+    font-size:2rem;
+    margin-bottom:0.5rem;
+  }
+  .payment-text{
+    font-weight:600;
+    color:#e6e6ea;
+    margin-bottom:0.25rem;
+  }
+  .payment-desc{
+    font-size:0.875rem;
+    color:#98a0ab;
+  }
 </style>
 {% endblock %}
 
@@ -146,11 +196,42 @@
       <div class="balance-amount">{{ user_credits }} Credits</div>
     </div>
 
-    <!-- Payment Info -->
+    <!-- Payment Method Selection -->
+    {% if stripe_configured and crypto_configured %}
     <div class="payment-info">
-      <h3>💳 Secure Payment</h3>
-      <p>All payments are processed securely by Stripe. You'll be redirected to Stripe's secure checkout page.</p>
+      <h3>💳 Choose Payment Method</h3>
+      <div class="payment-method-selector">
+        <label class="payment-method-option">
+          <input type="radio" name="payment_method" value="stripe" checked>
+          <span class="payment-method-card">
+            <span class="payment-icon">💳</span>
+            <span class="payment-text">Credit/Debit Card (Stripe)</span>
+            <span class="payment-desc">Visa, Mastercard, American Express</span>
+          </span>
+        </label>
+        <label class="payment-method-option">
+          <input type="radio" name="payment_method" value="crypto">
+          <span class="payment-method-card">
+            <span class="payment-icon">₿</span>
+            <span class="payment-text">Cryptocurrency (Coinbase)</span>
+            <span class="payment-desc">Bitcoin, Ethereum, Litecoin, USDC</span>
+          </span>
+        </label>
+      </div>
     </div>
+    {% elif stripe_configured %}
+    <div class="payment-info">
+      <h3>💳 Credit Card Payment</h3>
+      <p>Pay securely with your credit or debit card via Stripe.</p>
+      <input type="hidden" name="payment_method" value="stripe">
+    </div>
+    {% elif crypto_configured %}
+    <div class="payment-info">
+      <h3>₿ Cryptocurrency Payment</h3>
+      <p>Pay with Bitcoin, Ethereum, or other supported cryptocurrencies via Coinbase Commerce.</p>
+      <input type="hidden" name="payment_method" value="crypto">
+    </div>
+    {% endif %}
 
      <!-- Credit Packages -->
      <div class="credit-packages" role="radiogroup" aria-label="Credit packages">
@@ -259,7 +340,58 @@
   });
 
   function buySelectedPackage(){
-    if(selectedPackage){ window.open(selectedPackage.paymentUrl, '_blank'); }
+    if(!selectedPackage) return;
+    
+    const paymentMethodInput = document.querySelector('input[name="payment_method"]:checked');
+    const paymentMethod = paymentMethodInput ? paymentMethodInput.value : 'stripe';
+    
+    if(paymentMethod === 'stripe'){
+      // Use existing Stripe payment link
+      window.open(selectedPackage.paymentUrl, '_blank');
+    } else if(paymentMethod === 'crypto'){
+      // Create crypto payment
+      createCryptoPayment();
+    }
+  }
+
+  function createCryptoPayment(){
+    if(!selectedPackage) return;
+    
+    // Show loading state
+    const btn = document.getElementById('buy-button');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ Creating crypto payment...';
+    
+    // Send request to create crypto payment
+    fetch('/create_crypto_payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        package_name: selectedPackage.name,
+        credits: selectedPackage.credits,
+        amount: selectedPackage.price
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if(data.success && data.payment_url){
+        // Redirect to crypto payment page
+        window.location.href = data.payment_url;
+      } else {
+        alert('Error creating crypto payment: ' + (data.error || 'Unknown error'));
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('Error creating crypto payment. Please try again.');
+      btn.disabled = false;
+      btn.textContent = originalText;
+    });
   }
 
   // Success banner (проверяем success параметр)
