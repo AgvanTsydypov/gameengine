@@ -2188,12 +2188,31 @@ def coinbase_webhook():
         logger.info(f"Headers: {dict(request.headers)}")
         logger.info(f"Payload: {payload}")
         logger.info(f"Signature: {signature}")
+        logger.info(f"User-Agent: {request.headers.get('User-Agent', 'N/A')}")
+        logger.info(f"Content-Type: {request.headers.get('Content-Type', 'N/A')}")
+        
+        # Check if this looks like a real Coinbase webhook
+        user_agent = request.headers.get('User-Agent', '')
+        if not signature and 'weipay-webhooks' in user_agent:
+            logger.warning("⚠️ Received webhook with 'weipay-webhooks' User-Agent but no CB-Signature")
+            logger.warning("This might be a test webhook or from a different service")
+            logger.warning("Real Coinbase Commerce webhooks should have CB-Signature header")
+            return jsonify({'error': 'Missing CB-Signature header - not a valid Coinbase Commerce webhook'}), 400
         
         # Verify webhook signature (skip in development if secret not configured)
         flask_env = os.getenv('FLASK_ENV', 'development')
         webhook_secret_configured = bool(coinbase_manager.webhook_secret)
         
         if webhook_secret_configured:
+            if not signature:
+                logger.error("❌ Missing CB-Signature header")
+                logger.error("Coinbase Commerce webhooks must include CB-Signature header")
+                logger.error("This could be caused by:")
+                logger.error("1. Using wrong webhook URL (should be /coinbase_webhook)")
+                logger.error("2. Webhook not properly configured in Coinbase Commerce dashboard")
+                logger.error("3. Test request without proper headers")
+                return jsonify({'error': 'Missing CB-Signature header'}), 400
+            
             if not coinbase_manager.verify_webhook_signature(payload, signature):
                 logger.error("Coinbase webhook signature verification failed")
                 logger.error(f"Received signature: {signature}")
@@ -2444,7 +2463,9 @@ def test_coinbase_webhook():
         return jsonify({
             'status': 'Webhook endpoint is accessible',
             'method': 'GET',
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'coinbase_configured': coinbase_manager.is_configured(),
+            'webhook_secret_set': bool(coinbase_manager.webhook_secret)
         })
     
     # Handle POST request (simulate webhook)
