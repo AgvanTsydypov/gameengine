@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from datetime import datetime
+import time
 import os
 import logging
 import json
@@ -2191,13 +2192,22 @@ def coinbase_webhook():
         logger.info(f"User-Agent: {request.headers.get('User-Agent', 'N/A')}")
         logger.info(f"Content-Type: {request.headers.get('Content-Type', 'N/A')}")
         
-        # Check if this looks like a real Coinbase webhook
+        # Check for malicious/fake webhooks
         user_agent = request.headers.get('User-Agent', '')
-        if not signature and 'weipay-webhooks' in user_agent:
-            logger.warning("⚠️ Received webhook with 'weipay-webhooks' User-Agent but no CB-Signature")
-            logger.warning("This might be a test webhook or from a different service")
-            logger.warning("Real Coinbase Commerce webhooks should have CB-Signature header")
-            return jsonify({'error': 'Missing CB-Signature header - not a valid Coinbase Commerce webhook'}), 400
+        
+        # Block known malicious webhook attempts
+        malicious_user_agents = ['weipay-webhooks', 'bot', 'scanner']
+        if any(malicious_ua in user_agent.lower() for malicious_ua in malicious_user_agents):
+            logger.warning(f"🚫 BLOCKED: Malicious webhook attempt with User-Agent: {user_agent}")
+            logger.warning("This is NOT a legitimate Coinbase Commerce webhook")
+            logger.warning(f"Real Coinbase Commerce webhooks have User-Agent starting with 'Coinbase' and CB-Signature header")
+            return jsonify({'error': 'Blocked: Not a legitimate Coinbase Commerce webhook'}), 403
+        
+        # Log legitimate webhook attempts for debugging
+        if 'coinbase' not in user_agent.lower():
+            logger.warning(f"⚠️ Unexpected User-Agent for Coinbase webhook: {user_agent}")
+            logger.warning("Expected User-Agent to contain 'Coinbase'")
+            # Don't block yet, just warn - might be legitimate
         
         # Verify webhook signature (skip in development if secret not configured)
         flask_env = os.getenv('FLASK_ENV', 'development')
@@ -2211,15 +2221,20 @@ def coinbase_webhook():
                 logger.error("1. Using wrong webhook URL (should be /coinbase_webhook)")
                 logger.error("2. Webhook not properly configured in Coinbase Commerce dashboard")
                 logger.error("3. Test request without proper headers")
+                logger.error("4. Webhooks from different service (malicious)")
                 return jsonify({'error': 'Missing CB-Signature header'}), 400
             
-            if not coinbase_manager.verify_webhook_signature(payload, signature):
-                logger.error("Coinbase webhook signature verification failed")
-                logger.error(f"Received signature: {signature}")
+            # Verify the webhook signature
+            signature_valid = coinbase_manager.verify_webhook_signature(payload, signature)
+            if not signature_valid:
+                logger.error("❌ Coinbase webhook signature verification FAILED")
+                logger.error(f"Received signature: {signature[:20]}...")  # Only log first 20 chars for security
+                logger.error(f"Payload length: {len(payload)} bytes")
                 logger.error("This could be caused by:")
                 logger.error("1. Incorrect COINBASE_COMMERCE_WEBHOOK_SECRET environment variable")
                 logger.error("2. Webhook not configured in Coinbase Commerce dashboard")
                 logger.error("3. Using wrong webhook URL")
+                logger.error("4. Payload encoding/modification issues")
                 return jsonify({'error': 'Invalid signature'}), 400
             else:
                 logger.info("✅ Webhook signature verified successfully")
@@ -2227,28 +2242,87 @@ def coinbase_webhook():
             if flask_env == 'development':
                 logger.warning("⚠️  DEVELOPMENT MODE: Webhook signature verification SKIPPED")
                 logger.warning("⚠️  Set COINBASE_COMMERCE_WEBHOOK_SECRET for production!")
+                logger.warning("⚠️  This means ANY webhook request will be processed!")
             else:
                 logger.error("❌ PRODUCTION: Webhook secret not configured - rejecting webhook")
                 logger.error("Set COINBASE_COMMERCE_WEBHOOK_SECRET environment variable")
                 return jsonify({'error': 'Webhook secret not configured'}), 400
         
         # Parse webhook data
-        webhook_data = json.loads(payload)
-        event_type = webhook_data.get('type')
+        try:
+            webhook_data = json.loads(payload)
+            event_type = webhook_data.get('type')
+            
+            logger.info(f"📨 Processing Coinbase webhook event: {event_type}")
+            
+            # Log all supported event types for debugging
+            supported_events = ['charge:created', 'charge:pending', 'charge:confirmed', 'charge:failed']
+            if event_type not in supported_events:
+                logger.warning(f"⚠️ Received unsupported event type: {event_type}")
+                logger.info(f"Supported events: {supported_events}")
+                return jsonify({'status': 'ignored', 'message': f'Event type {event_type} not processed'})
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ Failed to parse webhook JSON payload: {e}")
+            logger.error(f"Payload: {payload[:500]}...")  # Log first 500 chars
+            return jsonify({'error': 'Invalid JSON payload'}), 400
         
-        logger.info(f"Processing Coinbase webhook event: {event_type}")
-        
-        if event_type == 'charge:confirmed':
-            logger.info("=== PROCESSING CHARGE:CONFIRMED ===")
+        # Handle different event types
+        if event_type == 'charge:created':
+            logger.info("📝 CHARGE:CREATED - Payment initiated")
+            charge_data = webhook_data.get('data', {})
+            charge_id = charge_data.get('id')
+            logger.info(f"New charge created: {charge_id}")
+            return jsonify({'status': 'received', 'message': 'Charge created event processed'})
+            
+        elif event_type == 'charge:pending':
+            logger.info("⏳ CHARGE:PENDING - Payment detected on blockchain")
+            charge_data = webhook_data.get('data', {})
+            charge_id = charge_data.get('id')
+            
+            # Update payment status to pending in database
+            try:
+                supabase_manager.update_payment_status(
+                    payment_id=charge_id,
+                    status='pending',
+                    metadata={'blockchain_detected': True, 'pending_timestamp': datetime.now().isoformat()}
+                )
+                logger.info(f"✅ Updated payment {charge_id} status to pending")
+            except Exception as e:
+                logger.error(f"❌ Error updating payment to pending: {e}")
+            
+            return jsonify({'status': 'received', 'message': 'Charge pending event processed'})
+            
+        elif event_type == 'charge:failed':
+            logger.warning("❌ CHARGE:FAILED - Payment failed")
+            charge_data = webhook_data.get('data', {})
+            charge_id = charge_data.get('id')
+            
+            # Update payment status to failed in database
+            try:
+                supabase_manager.update_payment_status(
+                    payment_id=charge_id,
+                    status='failed',
+                    metadata={'failure_timestamp': datetime.now().isoformat()}
+                )
+                logger.info(f"✅ Updated payment {charge_id} status to failed")
+            except Exception as e:
+                logger.error(f"❌ Error updating payment to failed: {e}")
+            
+            return jsonify({'status': 'received', 'message': 'Charge failed event processed'})
+            
+        elif event_type == 'charge:confirmed':
+            logger.info("💰 CHARGE:CONFIRMED - Payment successful, processing credits")
             # Payment confirmed - add credits to user account
             charge_data = webhook_data.get('data', {})
             charge_id = charge_data.get('id')
             
-            logger.info(f"Charge ID: {charge_id}")
-            logger.info(f"Charge data: {charge_data}")
+            logger.info(f"✅ Charge ID: {charge_id}")
+            logger.info(f"📊 Charge data keys: {list(charge_data.keys()) if charge_data else 'None'}")
             
             if not charge_id:
-                logger.error("No charge ID in webhook data")
+                logger.error("❌ No charge ID in webhook data")
+                logger.error(f"Webhook data structure: {webhook_data}")
                 return jsonify({'error': 'No charge ID'}), 400
             
             # Get charge details
@@ -2311,18 +2385,51 @@ def coinbase_webhook():
                 return jsonify({'status': 'already_processed', 'message': 'Payment already completed'})
             
             # Add credits to user account
-            logger.info(f"Adding {credits} credits to user {user_id}")
-            logger.info(f"Current user credits before addition: {supabase_manager.get_user_credits(user_id)}")
-            
             try:
-                success = supabase_manager.add_credits(user_id, int(credits))
-                logger.info(f"Add credits result: {success}")
+                credits_to_add = int(credits)
+                logger.info(f"💳 Adding {credits_to_add} credits to user {user_id} ({user_email})")
+                
+                # Get current credits for logging
+                current_credits = supabase_manager.get_user_credits(user_id)
+                logger.info(f"📊 Current user credits before addition: {current_credits}")
+                
+                # Add credits with retry logic
+                success = False
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        success = supabase_manager.add_credits(user_id, credits_to_add)
+                        if success:
+                            logger.info(f"✅ Credits added successfully on attempt {attempt + 1}")
+                            break
+                        else:
+                            logger.warning(f"⚠️ Add credits returned False on attempt {attempt + 1}")
+                    except Exception as retry_e:
+                        logger.error(f"❌ Exception on credit addition attempt {attempt + 1}: {retry_e}")
+                        if attempt == max_retries - 1:
+                            raise retry_e
+                        time.sleep(1)  # Wait 1 second before retry
+                
                 if success:
-                    logger.info(f"Current user credits after addition: {supabase_manager.get_user_credits(user_id)}")
+                    # Verify credits were actually added
+                    new_credits = supabase_manager.get_user_credits(user_id)
+                    expected_credits = current_credits + credits_to_add
+                    
+                    logger.info(f"📊 Current user credits after addition: {new_credits}")
+                    logger.info(f"📊 Expected credits: {expected_credits}")
+                    
+                    if new_credits != expected_credits:
+                        logger.error(f"❌ CREDIT MISMATCH: Expected {expected_credits}, got {new_credits}")
+                        logger.error("This indicates a potential issue with credit addition")
+                        # Don't fail the webhook, but log the issue
                 else:
-                    logger.error(f"add_credits returned False for user {user_id}")
+                    logger.error(f"❌ Failed to add credits after {max_retries} attempts")
+                    
+            except (ValueError, TypeError) as e:
+                logger.error(f"❌ Invalid credits value '{credits}': {e}")
+                success = False
             except Exception as e:
-                logger.error(f"Exception during add_credits: {e}")
+                logger.error(f"❌ Exception during add_credits: {e}")
                 import traceback
                 logger.error(f"Full traceback: {traceback.format_exc()}")
                 success = False
@@ -2400,55 +2507,10 @@ def coinbase_webhook():
                 logger.error(f"===========================")
                 return jsonify({'error': 'Failed to add credits'}), 500
         
-        elif event_type == 'charge:pending':
-            # Payment pending (detected in blockchain)
-            charge_data = webhook_data.get('data', {})
-            charge_id = charge_data.get('id')
-            logger.info(f"Crypto payment pending: {charge_id}")
-            
-            # Update payment status in database
-            try:
-                supabase_manager.update_payment_status(
-                    payment_id=charge_id,
-                    status='pending',
-                    metadata={
-                        'pending_at': 'now()',
-                        'blockchain_detected': True,
-                        'webhook_processed': True
-                    }
-                )
-                logger.info(f"Updated payment record status to pending for {charge_id}")
-            except Exception as e:
-                logger.error(f"Error updating payment record to pending for {charge_id}: {e}")
-            
-        elif event_type == 'charge:failed':
-            # Payment failed
-            charge_data = webhook_data.get('data', {})
-            charge_id = charge_data.get('id')
-            logger.info(f"Crypto payment failed: {charge_id}")
-            
-            # Update payment status in database
-            try:
-                supabase_manager.update_payment_status(
-                    payment_id=charge_id,
-                    status='failed',
-                    metadata={
-                        'failed_at': 'now()',
-                        'failure_reason': 'Payment failed per Coinbase webhook',
-                        'webhook_processed': True
-                    }
-                )
-                logger.info(f"Updated payment record status to failed for {charge_id}")
-            except Exception as e:
-                logger.error(f"Error updating payment record to failed for {charge_id}: {e}")
-            
-        elif event_type == 'charge:created':
-            # Payment created
-            charge_data = webhook_data.get('data', {})
-            charge_id = charge_data.get('id')
-            logger.info(f"Crypto payment created: {charge_id}")
-            
-            # No need to update database here as it should already be created when user initiates payment
+        else:
+            # This should not happen due to earlier validation, but handle gracefully
+            logger.warning(f"🤔 Unexpected event type reached end of handler: {event_type}")
+            return jsonify({'status': 'ignored', 'message': f'Event type {event_type} not fully processed'})
         
         return jsonify({'status': 'success'})
         
@@ -2458,15 +2520,25 @@ def coinbase_webhook():
 
 @app.route('/test_coinbase_webhook', methods=['GET', 'POST'])
 def test_coinbase_webhook():
-    """Test endpoint to check if webhook is working"""
+    """Test endpoint to check if webhook is working and debug webhook issues"""
     if request.method == 'GET':
-        return jsonify({
-            'status': 'Webhook endpoint is accessible',
+        # Detailed configuration check
+        config_status = {
+            'webhook_endpoint_accessible': True,
             'method': 'GET',
             'timestamp': datetime.now().isoformat(),
             'coinbase_configured': coinbase_manager.is_configured(),
-            'webhook_secret_set': bool(coinbase_manager.webhook_secret)
-        })
+            'webhook_secret_set': bool(coinbase_manager.webhook_secret),
+            'flask_env': os.getenv('FLASK_ENV', 'development'),
+            'supabase_connected': supabase_manager.is_connected() if 'supabase_manager' in globals() else False
+        }
+        
+        # Add detailed configuration info
+        if coinbase_manager.is_configured():
+            config_status['coinbase_api_key_set'] = bool(coinbase_manager.api_key)
+            config_status['coinbase_webhook_secret_length'] = len(coinbase_manager.webhook_secret) if coinbase_manager.webhook_secret else 0
+        
+        return jsonify(config_status)
     
     # Handle POST request (simulate webhook)
     try:
