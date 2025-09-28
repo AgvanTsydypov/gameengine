@@ -9,7 +9,7 @@
     display:grid;
     gap:24px;
     grid-template-columns:1fr;
-    max-width:1200px;margin:2rem auto;padding:0 1rem;
+    max-width:1000px;margin:2rem auto;padding:0 2rem;
   }
   @media (min-width:640px){ .credit-packages{ grid-template-columns:repeat(2,1fr);} }
   @media (min-width:1024px){ .credit-packages{ grid-template-columns:repeat(4,1fr);} }
@@ -86,9 +86,9 @@
   }
 
   /* ==== BUY BUTTON ==== */
-  .buy-button-container{text-align:center;margin:2rem 0;}
+  .buy-button-container{text-align:center;margin:2rem 0;max-width:600px;margin-left:auto;margin-right:auto;padding:0 2rem;}
   .buy-button{
-    width:100%;border-radius:8px;background:#9d7bff;color:#fff;padding:14px 24px;
+    width:100%;max-width:400px;border-radius:8px;background:#9d7bff;color:#fff;padding:14px 24px;
     border:2px solid #9d7bff;font-weight:600;font-size:1rem;cursor:pointer;transition:all .2s ease;
     text-decoration:none;display:inline-block;text-transform:uppercase;letter-spacing:1px;
     box-shadow:0 4px 12px rgba(157,123,255,.3);
@@ -112,12 +112,14 @@
   .current-balance{
     background:#1a1d27;border:2px solid #1ee4ff;border-radius:8px;padding:1rem;margin-bottom:2rem;text-align:center;
     box-shadow:0 0 15px rgba(30,228,255,.2);
+    max-width:600px;margin-left:auto;margin-right:auto;
   }
   .balance-amount{font-size:1.5rem;font-weight:700;color:#1ee4ff;text-align:center;}
   
   .payment-info{
     background:#0f1117;border:2px solid #1a1d27;border-radius:8px;padding:1rem;margin-bottom:2rem;text-align:center;
     box-shadow:0 2px 8px rgba(0,0,0,.3);
+    max-width:600px;margin-left:auto;margin-right:auto;
   }
   .payment-info h3{margin:0 0 .5rem 0;color:#e6e6ea;font-size:1.1rem;}
   .payment-info p{margin:0;color:#98a0ab;font-size:.9rem;}
@@ -125,6 +127,7 @@
   .selection-info{
     background:#1a1d27;border:2px solid #9d7bff;border-radius:8px;padding:1rem;margin:1rem 0;text-align:center;display:none;
     box-shadow:0 0 15px rgba(157,123,255,.2);
+    max-width:600px;margin-left:auto;margin-right:auto;
   }
   .selection-info h3{color:#e6e6ea;margin:0 0 .5rem 0;text-align:center;}
   .selection-info p{color:#98a0ab;margin:0;text-align:center;}
@@ -134,7 +137,7 @@
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
-  <div class="max-w-6xl mx-auto">
+  <div class="max-w-4xl mx-auto">
     <div class="text-center mb-8" style="text-align:center;width:100%;">
       <h1 style="color:#e6e6ea;font-size:2.5rem;font-weight:bold;margin-bottom:1rem;text-shadow:0 0 10px rgba(157,123,255,.5);text-align:center;width:100%;">Top Up Your Credits</h1>
       <p style="color:#98a0ab;font-size:1.125rem;text-align:center;width:100%;">Choose a credit package to continue creating amazing games with AI</p>
