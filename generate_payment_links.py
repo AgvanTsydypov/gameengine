@@ -66,9 +66,9 @@ def create_products_and_prices():
         print(f"✅ Price created: {price.id}")
         
         # Create payment link with redirect URLs
-        base_url = os.getenv('BASE_URL', 'http://localhost:8888')
+        base_url = os.getenv('BASE_URL', os.getenv('DEV_BASE_URL', 'http://localhost:3000'))
         if os.getenv('FLASK_ENV') == 'development':
-            base_url = 'http://localhost:8888'
+            base_url = os.getenv('DEV_BASE_URL', 'http://localhost:3000')
         else:
             base_url = 'https://glitchpeach.com'
         payment_link = stripe.PaymentLink.create(
@@ -137,7 +137,8 @@ def show_app_update_instructions(payment_links):
     
     print("")
     print("🌍 Environment-specific URLs:")
-    print("   - Development: http://localhost:8888/payment_success")
+    dev_url = os.getenv('DEV_BASE_URL', 'http://localhost:3000')
+    print(f"   - Development: {dev_url}/payment_success")
     print("   - Production: https://glitchpeach.com/payment_success")
     print("="*60)
 
@@ -177,7 +178,8 @@ def print_app_config(payment_links):
     print("="*60)
     print("1. Set BASE_URL in your .env file:")
     print("   BASE_URL=https://your-domain.com (for production)")
-    print("   BASE_URL=http://localhost:8888 (for development)")
+    dev_url = os.getenv('DEV_BASE_URL', 'http://localhost:3000')
+    print(f"   DEV_BASE_URL={dev_url} (for development)")
     print("")
     print("2. Set up webhooks for checkout.session.completed:")
     print("   - Webhook URL: https://your-domain.com/stripe_webhook")

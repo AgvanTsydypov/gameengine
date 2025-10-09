@@ -81,7 +81,7 @@ class Config:
         
         # FLASK_ENV takes priority - if development, always use localhost
         if flask_env == 'development':
-            return 'http://localhost:3000'
+            return os.getenv('DEV_BASE_URL', 'http://localhost:3000')
         elif flask_env == 'production':
             return 'https://glitchpeach.com'
         else:
@@ -90,7 +90,7 @@ class Config:
             if base_url and base_url.strip():
                 return base_url.strip()
             else:
-                return 'http://localhost:3000'  # Default to development
+                return os.getenv('DEV_BASE_URL', 'http://localhost:3000')  # Default to development
 
 class DevelopmentConfig(Config):
     """Конфигурация для разработки"""

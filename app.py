@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from config import config
 from supabase_client import supabase_manager
 from stripe_client import stripe_manager
+from nowpayments_client import nowpayments_manager
 from html_preview_generator import HTMLPreviewGenerator
 import openai
 import stripe
@@ -89,7 +90,7 @@ def get_base_url():
     """Get BASE_URL based on current FLASK_ENV"""
     flask_env = os.getenv('FLASK_ENV', 'development')
     if flask_env == 'development':
-        return 'http://localhost:8888'
+        return os.getenv('DEV_BASE_URL', 'http://localhost:3000')
     elif flask_env == 'production':
         return 'https://glitchpeach.com'
     else:
@@ -97,7 +98,7 @@ def get_base_url():
         if base_url and base_url.strip():
             return base_url.strip()
         else:
-            return 'http://localhost:8888'
+            return os.getenv('DEV_BASE_URL', 'http://localhost:3000')
 
 app.config['BASE_URL'] = get_base_url()
 
@@ -1878,6 +1879,227 @@ def payment_success():
     logger.info("Redirecting to payment page with success flag")
     return redirect('/payment?success=true')
 
+# ============ NOWPAYMENTS CRYPTOCURRENCY ROUTES ============
+
+@app.route('/nowpayments_create', methods=['POST'])
+def nowpayments_create():
+    """Creates NOWPayments invoice for cryptocurrency payment"""
+    try:
+        logger.info("=== NOWPAYMENTS CREATE ROUTE CALLED ===")
+        
+        if not nowpayments_manager.is_configured():
+            return jsonify({'error': 'NOWPayments not configured'}), 400
+        
+        data = request.get_json()
+        
+        # Get payment details
+        credits = data.get('credits')
+        price_usd = data.get('price_usd')
+        user_email = data.get('user_email', 'guest@example.com')
+        
+        if not credits or not price_usd:
+            return jsonify({'error': 'Missing required parameters'}), 400
+        
+        # Generate unique order ID
+        import uuid
+        order_id = f"credits_{credits}_{uuid.uuid4().hex[:8]}"
+        
+        # Store user_id in order_id if logged in
+        if 'user_id' in session:
+            order_id = f"user_{session['user_id']}_{order_id}"
+        
+        # Create invoice URL for your app
+        success_url = f"{request.host_url}nowpayments_success"
+        cancel_url = f"{request.host_url}payment?cancelled=true"
+        ipn_callback_url = f"{request.host_url}nowpayments_webhook"
+        
+        # Create invoice (customer can choose cryptocurrency)
+        invoice = nowpayments_manager.create_invoice(
+            price_amount=float(price_usd),
+            price_currency='usd',
+            order_id=order_id,
+            order_description=f"{credits} game credits",
+            ipn_callback_url=ipn_callback_url,
+            success_url=success_url,
+            cancel_url=cancel_url
+        )
+        
+        if invoice:
+            logger.info(f"Invoice created: {invoice.get('id')} for {credits} credits")
+            return jsonify({
+                'success': True,
+                'invoice_url': invoice.get('invoice_url'),
+                'invoice_id': invoice.get('id'),
+                'order_id': order_id
+            })
+        else:
+            return jsonify({'error': 'Failed to create invoice'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error creating NOWPayments invoice: {e}")
+        return jsonify({'error': 'Error creating payment'}), 500
+
+@app.route('/nowpayments_webhook', methods=['POST'])
+def nowpayments_webhook():
+    """Handle NOWPayments IPN (Instant Payment Notification) webhook"""
+    logger.info("=== NOWPAYMENTS WEBHOOK CALLED ===")
+    
+    try:
+        # Get raw request data for signature verification
+        payload = request.get_data()
+        signature = request.headers.get('x-nowpayments-sig')
+        
+        logger.info(f"Webhook payload: {payload.decode('utf-8')}")
+        logger.info(f"Webhook signature: {signature}")
+        
+        # Verify signature if IPN secret is configured
+        if nowpayments_manager.ipn_secret:
+            if not nowpayments_manager.verify_ipn_signature(payload, signature):
+                logger.error("NOWPayments IPN signature verification failed")
+                return jsonify({'error': 'Invalid signature'}), 400
+        else:
+            logger.warning("NOWPayments IPN signature verification skipped (no secret configured)")
+        
+        # Parse payment data
+        payment_data = json.loads(payload)
+        
+        logger.info(f"NOWPayments webhook data: {json.dumps(payment_data, indent=2)}")
+        
+        # Get payment status
+        payment_status = payment_data.get('payment_status')
+        order_id = payment_data.get('order_id')
+        price_amount = payment_data.get('price_amount')
+        pay_amount = payment_data.get('pay_amount')
+        pay_currency = payment_data.get('pay_currency')
+        
+        logger.info(f"Payment status: {payment_status}, Order: {order_id}")
+        logger.info(f"Price: ${price_amount}, Paid: {pay_amount} {pay_currency}")
+        
+        # Only process finished/confirmed payments
+        if payment_status in ['finished', 'confirmed']:
+            logger.info(f"Processing confirmed payment for order: {order_id}")
+            
+            # Extract user_id and credits from order_id
+            # Format: user_{user_id}_credits_{credits}_{uuid} OR credits_{credits}_{uuid}
+            try:
+                if order_id.startswith('user_'):
+                    # Extract user_id
+                    parts = order_id.split('_')
+                    logger.info(f"Order ID parts: {parts}")
+                    
+                    user_id = parts[1]
+                    logger.info(f"Extracted user_id: {user_id}")
+                    
+                    credits_index = parts.index('credits')
+                    credits = int(parts[credits_index + 1])
+                    logger.info(f"Extracted credits: {credits}")
+                    
+                    # Check if user exists and get current credits
+                    current_credits = supabase_manager.get_user_credits(user_id)
+                    logger.info(f"Current user credits: {current_credits}")
+                    
+                    # Add credits to user account
+                    success = supabase_manager.add_credits(user_id, credits)
+                    
+                    if success:
+                        new_credits = supabase_manager.get_user_credits(user_id)
+                        logger.info(f"✅ SUCCESS: Added {credits} credits to user {user_id}")
+                        logger.info(f"✅ Credits before: {current_credits}, after: {new_credits}")
+                        logger.info(f"✅ Payment: {pay_amount} {pay_currency} = ${price_amount}")
+                    else:
+                        logger.error(f"❌ FAILED: Could not add credits to user {user_id}")
+                        
+                else:
+                    logger.warning(f"Order {order_id} has no user_id - guest checkout not yet supported")
+                    
+            except (ValueError, IndexError) as e:
+                logger.error(f"Failed to parse order_id: {order_id} - {e}")
+                logger.error(f"Order ID parts: {order_id.split('_')}")
+        
+        elif payment_status == 'partially_paid':
+            logger.info(f"Payment partially paid for order: {order_id}")
+        elif payment_status == 'failed':
+            logger.warning(f"Payment failed for order: {order_id}")
+        elif payment_status == 'expired':
+            logger.warning(f"Payment expired for order: {order_id}")
+        else:
+            logger.warning(f"Unknown payment status: {payment_status}")
+        
+        # Always return 200 to acknowledge receipt
+        return jsonify({'status': 'ok'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error processing NOWPayments webhook: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return jsonify({'error': 'Webhook processing failed'}), 500
+
+@app.route('/nowpayments_success')
+def nowpayments_success():
+    """Handle successful payment redirect from NOWPayments"""
+    logger.info("=== NOWPAYMENTS SUCCESS ROUTE CALLED ===")
+    
+    # Get payment ID from URL parameters
+    payment_id = request.args.get('NP_id')
+    logger.info(f"NOWPayments payment ID: {payment_id}")
+    
+    # Check if we've already processed this payment (prevent duplicate credits)
+    processed_key = f"processed_payment_{payment_id}"
+    if payment_id and processed_key in session:
+        logger.info(f"Payment {payment_id} already processed - skipping credit addition")
+        flash('Payment already processed! Your credits are in your account.', 'info')
+        return redirect('/payment?success=true')
+    
+    # Try to get payment status from NOWPayments API as backup
+    if payment_id and 'user_id' in session:
+        try:
+            # Get payment status from NOWPayments
+            payment_status = nowpayments_manager.get_payment_status(int(payment_id))
+            
+            if payment_status and payment_status.get('payment_status') in ['finished', 'confirmed']:
+                logger.info("Payment confirmed via API - adding credits manually")
+                
+                # Extract credits from order_id
+                order_id = payment_status.get('order_id', '')
+                
+                # Parse credits from order_id: user_{user_id}_credits_{credits}_{uuid}
+                credits_to_add = 6  # default fallback
+                try:
+                    if 'credits_' in order_id:
+                        parts = order_id.split('_')
+                        credits_index = parts.index('credits')
+                        credits_to_add = int(parts[credits_index + 1])
+                        logger.info(f"Extracted credits from order_id: {credits_to_add}")
+                except (ValueError, IndexError) as e:
+                    logger.warning(f"Could not parse credits from order_id: {order_id} - {e}")
+                
+                # Add credits manually
+                user_id = str(session['user_id'])
+                success = supabase_manager.add_credits(user_id, credits_to_add)
+                
+                if success:
+                    # Mark this payment as processed
+                    session[processed_key] = True
+                    session.permanent = True  # Make session persistent
+                    
+                    logger.info(f"✅ MANUAL: Added {credits_to_add} credits to user {user_id}")
+                    flash(f'Payment successful! Added {credits_to_add} credits to your account.', 'success')
+                else:
+                    logger.error(f"❌ MANUAL: Failed to add credits to user {user_id}")
+                    flash('Payment received! Credits will be added shortly.', 'success')
+            else:
+                logger.info("Payment not yet confirmed - waiting for webhook")
+                flash('Payment received! Your credits will be added shortly.', 'success')
+                
+        except Exception as e:
+            logger.error(f"Error checking payment status: {e}")
+            flash('Payment received! Your credits will be added shortly.', 'success')
+    else:
+        flash('Payment received! Your credits will be added shortly.', 'success')
+    
+    logger.info("Redirecting to payment page with success flag")
+    return redirect('/payment?success=true')
+
 # ============ LIKES SYSTEM ROUTES ============
 
 @app.route('/like_game', methods=['POST'])
@@ -2384,5 +2606,5 @@ if __name__ == '__main__':
     else:
         logger.warning("⚠️  Supabase not connected. Check .env settings")
     
-    port = app.config.get('PORT', 8888)
+    port = app.config.get('PORT', 3000)
     app.run(debug=True, host='0.0.0.0', port=port)
