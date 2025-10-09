@@ -70,7 +70,7 @@ class Config:
     LOG_FILE = os.getenv('LOG_FILE', 'app.log')
     
     # Порт приложения
-    PORT = int(os.getenv('PORT', 8888))
+    PORT = int(os.getenv('PORT', 3000))
     
     # Базовый URL для редиректов (для email подтверждения)
     # Динамически определяется на основе FLASK_ENV
@@ -81,7 +81,7 @@ class Config:
         
         # FLASK_ENV takes priority - if development, always use localhost
         if flask_env == 'development':
-            return 'http://localhost:8888'
+            return 'http://localhost:3000'
         elif flask_env == 'production':
             return 'https://glitchpeach.com'
         else:
@@ -90,7 +90,7 @@ class Config:
             if base_url and base_url.strip():
                 return base_url.strip()
             else:
-                return 'http://localhost:8888'  # Default to development
+                return 'http://localhost:3000'  # Default to development
 
 class DevelopmentConfig(Config):
     """Конфигурация для разработки"""

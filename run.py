@@ -67,13 +67,13 @@ def main():
     print()
     
     # Запускаем приложение
-    port = app.config.get('PORT', 8888)
+    port = app.config.get('PORT', 3000)
     print(f"🌐 Приложение доступно по адресу: http://localhost:{port}")
     print("📝 Для остановки нажмите Ctrl+C")
     print("=" * 50)
     
     try:
-        port = app.config.get('PORT', 8888)
+        port = app.config.get('PORT', 3000)
         app.run(
             debug=os.getenv('FLASK_DEBUG', 'True').lower() == 'true',
             host='0.0.0.0',
