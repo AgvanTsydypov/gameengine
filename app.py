@@ -1761,12 +1761,38 @@ def stripe_webhook():
                         user = supabase_manager.get_user_by_email(customer_email)
                         if user:
                             user_id = user['id']
-                            # Add credits to user account
-                            success = supabase_manager.add_credits(user_id, credits)
-                            if success:
-                                logger.info(f"Added {credits} credits to user {user_id} ({customer_email}) after successful payment")
+                            
+                            # Create order_id for Stripe payments (similar format to NOWPayments)
+                            order_id = f"stripe_{user_id}_credits_{credits}_{session.id[:8]}"
+                            
+                            # Check if this payment was already processed
+                            if supabase_manager.check_processed_payment(order_id):
+                                logger.info(f"Stripe payment {order_id} already processed - skipping duplicate credit addition")
                             else:
-                                logger.error(f"Failed to add credits to user {user_id}")
+                                # Add credits to user account
+                                success = supabase_manager.add_credits(user_id, credits)
+                                if success:
+                                    # Mark payment as processed in database
+                                    try:
+                                        supabase_manager.mark_payment_processed(
+                                            order_id=order_id,
+                                            payment_id=session.id,
+                                            user_id=user_id,
+                                            credits_added=credits,
+                                            amount_paid=float(session.amount_total / 100) if session.amount_total else None,  # Convert cents to dollars
+                                            currency='usd',  # Stripe payments are in USD
+                                            payment_type='stripe',
+                                            stripe_session_id=session.id,
+                                            customer_email=customer_email
+                                        )
+                                        logger.info(f"Marked Stripe payment {session.id} as processed for user {user_id}")
+                                    except Exception as e:
+                                        logger.warning(f"Could not mark Stripe payment as processed: {e}")
+                                    
+                                    logger.info(f"✅ STRIPE SUCCESS: Added {credits} credits to user {user_id} ({customer_email})")
+                                    logger.info(f"✅ Payment: ${session.amount_total / 100 if session.amount_total else 'unknown'} USD")
+                                else:
+                                    logger.error(f"Failed to add credits to user {user_id}")
                         else:
                             logger.error(f"User not found for email: {customer_email}")
                     else:
@@ -1979,6 +2005,17 @@ def nowpayments_webhook():
         if payment_status in ['finished', 'confirmed']:
             logger.info(f"Processing confirmed payment for order: {order_id}")
             
+            # Check if we've already processed this payment (prevent duplicate credits)
+            # Use Supabase to track processed payments since webhooks don't have sessions
+            try:
+                # Check if this order_id has already been processed
+                existing_payment = supabase_manager.check_processed_payment(order_id)
+                if existing_payment:
+                    logger.info(f"Payment {order_id} already processed via webhook - skipping")
+                    return jsonify({'status': 'ok'}), 200
+            except Exception as e:
+                logger.warning(f"Could not check processed payment status: {e}")
+            
             # Extract user_id and credits from order_id
             # Format: user_{user_id}_credits_{credits}_{uuid} OR credits_{credits}_{uuid}
             try:
@@ -2002,8 +2039,22 @@ def nowpayments_webhook():
                     success = supabase_manager.add_credits(user_id, credits)
                     
                     if success:
+                        # Mark this payment as processed in database
+                        try:
+                            supabase_manager.mark_payment_processed(
+                                order_id=order_id,
+                                payment_id=payment_data.get('payment_id'),
+                                user_id=user_id,
+                                credits_added=credits,
+                                amount_paid=float(price_amount) if price_amount else None,
+                                currency=pay_currency
+                            )
+                            logger.info(f"Marked payment {order_id} as processed for user {user_id}")
+                        except Exception as e:
+                            logger.warning(f"Could not mark payment as processed: {e}")
+                        
                         new_credits = supabase_manager.get_user_credits(user_id)
-                        logger.info(f"✅ SUCCESS: Added {credits} credits to user {user_id}")
+                        logger.info(f"✅ WEBHOOK SUCCESS: Added {credits} credits to user {user_id}")
                         logger.info(f"✅ Credits before: {current_credits}, after: {new_credits}")
                         logger.info(f"✅ Payment: {pay_amount} {pay_currency} = ${price_amount}")
                     else:
@@ -2022,6 +2073,10 @@ def nowpayments_webhook():
             logger.warning(f"Payment failed for order: {order_id}")
         elif payment_status == 'expired':
             logger.warning(f"Payment expired for order: {order_id}")
+        elif payment_status == 'waiting':
+            logger.info(f"Payment waiting for user action: {order_id}")
+        elif payment_status == 'confirming':
+            logger.info(f"Payment confirming on blockchain: {order_id}")
         else:
             logger.warning(f"Unknown payment status: {payment_status}")
         
@@ -2044,11 +2099,18 @@ def nowpayments_success():
     logger.info(f"NOWPayments payment ID: {payment_id}")
     
     # Check if we've already processed this payment (prevent duplicate credits)
-    processed_key = f"processed_payment_{payment_id}"
-    if payment_id and processed_key in session:
-        logger.info(f"Payment {payment_id} already processed - skipping credit addition")
-        flash('Payment already processed! Your credits are in your account.', 'info')
-        return redirect('/payment?success=true')
+    if payment_id:
+        # First try to get order_id from NOWPayments API
+        try:
+            payment_status = nowpayments_manager.get_payment_status(int(payment_id))
+            order_id = payment_status.get('order_id') if payment_status else None
+            
+            if order_id and supabase_manager.check_processed_payment(order_id):
+                logger.info(f"Payment {payment_id} (order: {order_id}) already processed - skipping credit addition")
+                flash('Payment already processed! Your credits are in your account.', 'info')
+                return redirect('/payment?success=true')
+        except Exception as e:
+            logger.warning(f"Could not check payment status for {payment_id}: {e}")
     
     # Try to get payment status from NOWPayments API as backup
     if payment_id and 'user_id' in session:
@@ -2059,8 +2121,10 @@ def nowpayments_success():
             if payment_status and payment_status.get('payment_status') in ['finished', 'confirmed']:
                 logger.info("Payment confirmed via API - adding credits manually")
                 
-                # Extract credits from order_id
+                # Extract payment details
                 order_id = payment_status.get('order_id', '')
+                price_amount = payment_status.get('price_amount')
+                pay_currency = payment_status.get('pay_currency')
                 
                 # Parse credits from order_id: user_{user_id}_credits_{credits}_{uuid}
                 credits_to_add = 6  # default fallback
@@ -2073,14 +2137,30 @@ def nowpayments_success():
                 except (ValueError, IndexError) as e:
                     logger.warning(f"Could not parse credits from order_id: {order_id} - {e}")
                 
+                # Check again if this payment was already processed (double-check)
+                if supabase_manager.check_processed_payment(order_id):
+                    logger.info(f"Payment {order_id} already processed - skipping duplicate credit addition")
+                    flash('Payment already processed! Your credits are in your account.', 'info')
+                    return redirect('/payment?success=true')
+                
                 # Add credits manually
                 user_id = str(session['user_id'])
                 success = supabase_manager.add_credits(user_id, credits_to_add)
                 
                 if success:
-                    # Mark this payment as processed
-                    session[processed_key] = True
-                    session.permanent = True  # Make session persistent
+                    # Mark this payment as processed in database
+                    try:
+                        supabase_manager.mark_payment_processed(
+                            order_id=order_id,
+                            payment_id=payment_id,
+                            user_id=user_id,
+                            credits_added=credits_to_add,
+                            amount_paid=float(price_amount) if price_amount else None,
+                            currency=pay_currency
+                        )
+                        logger.info(f"Marked payment {payment_id} (order: {order_id}) as processed for user {user_id}")
+                    except Exception as e:
+                        logger.warning(f"Could not mark payment as processed: {e}")
                     
                     logger.info(f"✅ MANUAL: Added {credits_to_add} credits to user {user_id}")
                     flash(f'Payment successful! Added {credits_to_add} credits to your account.', 'success')

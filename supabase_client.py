@@ -1304,6 +1304,119 @@ class SupabaseManager:
         except Exception as e:
             logger.error(f"Error adding credits for user {user_id}: {e}")
             return False
+    
+    def check_processed_payment(self, order_id: str) -> bool:
+        """
+        Check if a payment has already been processed
+        
+        Args:
+            order_id: The order ID to check
+            
+        Returns:
+            True if payment has been processed, False otherwise
+        """
+        if not self.is_connected():
+            return False
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                response = service_client.table('processed_payments').select('order_id').eq('order_id', order_id).execute()
+                
+                return len(response.data) > 0
+                
+        except Exception as e:
+            logger.error(f"Error checking processed payment {order_id}: {e}")
+            return False
+    
+    def mark_payment_processed(self, order_id: str, payment_id: str = None, user_id: str = None, 
+                             credits_added: int = None, amount_paid: float = None, currency: str = None,
+                             payment_type: str = 'nowpayments', stripe_session_id: str = None, 
+                             customer_email: str = None) -> bool:
+        """
+        Mark a payment as processed to prevent duplicate credit additions
+        
+        Args:
+            order_id: The order ID
+            payment_id: The payment ID (NOWPayments or Stripe)
+            user_id: The user ID who made the payment
+            credits_added: Number of credits added
+            amount_paid: Amount paid in USD
+            currency: Currency used for payment
+            payment_type: Type of payment ('stripe' or 'nowpayments')
+            stripe_session_id: Stripe session ID (for Stripe payments)
+            customer_email: Customer email (for Stripe payments)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_connected():
+            return False
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                payment_data = {
+                    'order_id': order_id,
+                    'payment_id': payment_id,
+                    'user_id': user_id,
+                    'credits_added': credits_added,
+                    'amount_paid': amount_paid,
+                    'currency': currency,
+                    'payment_type': payment_type,
+                    'stripe_session_id': stripe_session_id,
+                    'customer_email': customer_email,
+                    'processed_at': 'now()'
+                }
+                
+                # Remove None values
+                payment_data = {k: v for k, v in payment_data.items() if v is not None}
+                
+                response = service_client.table('processed_payments').insert(payment_data).execute()
+                
+                if response.data and len(response.data) > 0:
+                    logger.info(f"Marked payment {order_id} as processed for user {user_id}")
+                    return True
+                    
+        except Exception as e:
+            logger.error(f"Error marking payment as processed {order_id}: {e}")
+            return False
+        
+        return False
+    
+    def get_user_payment_history(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Get payment history for a user
+        
+        Args:
+            user_id: The user ID
+            limit: Maximum number of payments to return
+            
+        Returns:
+            List of payment records
+        """
+        if not self.is_connected():
+            return []
+        
+        try:
+            # Use service role key to bypass RLS
+            if self.service_role_key:
+                from supabase import create_client
+                service_client = create_client(self.url, self.service_role_key)
+                
+                response = service_client.table('processed_payments').select('*').eq('user_id', user_id).order('processed_at', desc=True).limit(limit).execute()
+                
+                return response.data if response.data else []
+                
+        except Exception as e:
+            logger.error(f"Error getting payment history for user {user_id}: {e}")
+            return []
 
     def search_games_with_stats(self, search_query: str, limit: int = None, order_by: str = 'created_at') -> List[Dict[str, Any]]:
         """
