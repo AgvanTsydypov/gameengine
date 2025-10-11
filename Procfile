@@ -1,1 +1,1 @@
-web: python setup_render.py && gunicorn -k gthread -w 1 --threads 8 --timeout 300 --graceful-timeout 180 --keep-alive 5 app:app --bind 0.0.0.0:$PORT
+web: python setup_render.py && gunicorn -k gthread -w 1 --threads 8 --timeout 600 --graceful-timeout 300 --keep-alive 5 app:app --bind 0.0.0.0:$PORT

@@ -376,13 +376,20 @@ async function generateGame() {
   startProgressAnimation();
   
   try {
+    // Create an AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+    
     const response = await fetch('/api/generate-game', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt: prompt, model: model })
+      body: JSON.stringify({ prompt: prompt, model: model }),
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId); // Clear timeout if request completes
     
     const data = await response.json();
     
@@ -427,7 +434,13 @@ async function generateGame() {
     completeProgress();
     setTimeout(() => {
       hideProgressScreen();
-      App.showAlert('Failed to generate game. Please check your connection and try again.', 'error');
+      
+      // Check if it's a timeout error
+      if (error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('fetch')) {
+        App.showAlert('Game generation timed out. This can happen with complex games. Please try again or use a simpler prompt.', 'error');
+      } else {
+        App.showAlert('Failed to generate game. Please check your connection and try again.', 'error');
+      }
     }, 500);
   } finally {
     isGenerating = false;

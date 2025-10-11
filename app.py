@@ -298,7 +298,7 @@ def generate_game_thumbnail_with_multiple_attempts(html_content: str, game_title
     Returns:
         Path to the generated thumbnail file, or None if all attempts failed
     """
-    wait_times = [2, 8, 15]  # Increasing wait times for each attempt
+    wait_times = [2, 4, 6]  # Reduced wait times for faster generation
     
     for attempt in range(3):
         try:
@@ -2466,9 +2466,30 @@ def api_publish_game():
         if not supabase_manager.is_connected():
             return jsonify({'error': 'Storage service not available'}), 500
         
-        # Generate thumbnail for the AI-generated game with 3 attempts
+        # Generate thumbnail for the AI-generated game with timeout protection
         logger.info(f"Generating thumbnail for AI-generated game: {title}")
-        thumbnail_path = generate_game_thumbnail_with_multiple_attempts(html_content, title)
+        try:
+            # Set a timeout for thumbnail generation to prevent hanging
+            import signal
+            
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Thumbnail generation timed out")
+            
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(120)  # 2 minute timeout
+            
+            thumbnail_path = generate_game_thumbnail_with_multiple_attempts(html_content, title)
+            
+            signal.alarm(0)  # Cancel the alarm
+            
+            if not thumbnail_path:
+                logger.warning("Thumbnail generation failed, proceeding without thumbnail")
+                thumbnail_path = None
+                
+        except (TimeoutError, Exception) as e:
+            logger.warning(f"Thumbnail generation failed or timed out: {e}. Proceeding without thumbnail.")
+            signal.alarm(0)  # Cancel the alarm
+            thumbnail_path = None
         
         # Create a filename based on title
         safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
